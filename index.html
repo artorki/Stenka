@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>STENKA — Minimal Tactical Board Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS for Serverless GitHub Pages Online Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- Vazirmatn & Inter Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        :root {
+            --bg-canvas: #F5F5F3;
+            --bg-dots: #E2E2DC;
+            --surface-card: #FFFFFF;
+            --surface-muted: #EFECE6;
+            --board-frame: #E6E4DD;
+            --board-surface: #FCFBF9;
+            --grid-line: #E5E4DF;
+            --grid-vertex: #C8C6BE;
+            --border-subtle: #E4E3DE;
+            --text-primary: #141413;
+            --text-secondary: #6E6D68;
+            --text-muted: #9E9D96;
+            --accent-finish: #10B981;
+        }
+
+        .dark {
+            --bg-canvas: #0B0C0E;
+            --bg-dots: #1A1C20;
+            --surface-card: #131519;
+            --surface-muted: #1C1F26;
+            --board-frame: #1E2128;
+            --board-surface: #121418;
+            --grid-line: #22262F;
+            --grid-vertex: #383E4C;
+            --border-subtle: #232730;
+            --text-primary: #F3F4F6;
+            --text-secondary: #9CA3AF;
+            --text-muted: #6B7280;
+            --accent-finish: #10B981;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Vazirmatn', 'Inter', sans-serif;
+            background-color: var(--bg-canvas);
+            background-image:
+                linear-gradient(to right, var(--bg-dots) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--bg-dots) 1px, transparent 1px);
+            background-size: 40px 40px;
+            color: var(--text-primary);
+            margin: 0;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        .font-mono-en {
+            font-family: 'Inter', monospace;
+            letter-spacing: 0.08em;
+        }
+
+        /* Minimalist Architectural Board Frame */
+        .board-shell {
+            background-color: var(--board-frame);
+            padding: 12px;
+            border-radius: 26px;
+            border: 1px solid var(--border-subtle);
+            box-shadow:
+                0 24px 48px -12px rgba(20, 20, 19, 0.08),
+                0 4px 12px -2px rgba(20, 20, 19, 0.04),
+                inset 0 1px 0 rgba(255, 255, 255, 0.7);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+
+        .dark .board-shell {
+            box-shadow:
+                0 28px 60px -12px rgba(0, 0, 0, 0.65),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .board-canvas {
+            background-color: var(--board-surface);
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.02);
+        }
+
+        /* Top Finish Subtle Gradient */
+        .finish-zone {
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.14) 0%, rgba(16, 185, 129, 0.03) 75%, transparent 100%);
+            border-top: 2.5px solid var(--accent-finish);
+        }
+
+        /* Lockdown Zone for Blitz Mode */
+        .lockdown-cell {
+            background: repeating-linear-gradient(
+                -45deg,
+                rgba(225, 29, 72, 0.08),
+                rgba(225, 29, 72, 0.08) 5px,
+                rgba(225, 29, 72, 0.16) 5px,
+                rgba(225, 29, 72, 0.16) 10px
+            );
+        }
+
+        /* Pawns: Clean Tactile Matte + Subtle Specular Highlight */
+        .pawn-token {
+            border-radius: 9999px;
+            position: relative;
+            transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow:
+                0 6px 14px -3px rgba(0, 0, 0, 0.28),
+                0 2px 4px -1px rgba(0, 0, 0, 0.14),
+                inset 0 2px 3px rgba(255, 255, 255, 0.38);
+        }
+
+        .pawn-p0 { background: radial-gradient(circle at 35% 30%, #F43F5E, #E11D48 60%, #9F1239 100%); }
+        .pawn-p1 { background: radial-gradient(circle at 35% 30%, #3B82F6, #2563EB 60%, #1D4ED8 100%); }
+        .pawn-p2 { background: radial-gradient(circle at 35% 30%, #10B981, #059669 60%, #047857 100%); }
+        .pawn-p3 { background: radial-gradient(circle at 35% 30%, #F59E0B, #D97706 60%, #B45309 100%); }
+
+        /* Active Player Halo */
+        .pawn-halo {
+            position: absolute;
+            inset: -5px;
+            border-radius: 9999px;
+            border: 1.75px solid currentColor;
+            opacity: 0.55;
+            animation: breatheHalo 2s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes breatheHalo {
+            0%, 100% { transform: scale(0.96); opacity: 0.35; }
+            50% { transform: scale(1.16); opacity: 0.75; }
+        }
+
+        /* Placed Walls: Clean Capsule Geometry */
+        .wall-bar {
+            border-radius: 9999px;
+            position: absolute;
+            transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .wall-p0 { background-color: #E11D48; }
+        .wall-p1 { background-color: #2563EB; }
+        .wall-p2 { background-color: #059669; }
+        .wall-p3 { background-color: #D97706; }
+
+        /* Ghost Wall Preview (High-Precision Visual Feedback) */
+        .wall-ghost-valid {
+            border-radius: 9999px;
+            position: absolute;
+            pointer-events: none;
+            z-index: 35;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 4px 12px rgba(0, 0, 0, 0.22);
+            transition: left 0.07s ease-out, top 0.07s ease-out, width 0.07s ease-out, height 0.07s ease-out;
+        }
+        .dark .wall-ghost-valid {
+            box-shadow: 0 0 0 3px rgba(18, 20, 24, 0.9), 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .wall-ghost-invalid {
+            border-radius: 9999px;
+            position: absolute;
+            pointer-events: none;
+            z-index: 35;
+            background: repeating-linear-gradient(
+                45deg,
+                #EF4444,
+                #EF4444 4px,
+                rgba(239, 68, 68, 0.25) 4px,
+                rgba(239, 68, 68, 0.25) 8px
+            );
+            opacity: 0.75;
+        }
+
+        /* Grid Intersection Micro-Dots for Visual Precision */
+        .vertex-dot {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            border-radius: 9999px;
+            background-color: var(--grid-vertex);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+
+        @keyframes subtleShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .shake-board {
+            animation: subtleShake 0.26s ease-in-out;
+        }
+
+        @keyframes floatReaction {
+            0% { transform: translate(-50%, 0) scale(0.8); opacity: 1; }
+            70% { transform: translate(-50%, -44px) scale(1.1); opacity: 1; }
+            100% { transform: translate(-50%, -64px) scale(0.95); opacity: 0; }
+        }
+        .reaction-bubble {
+            animation: floatReaction 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-between min-h-screen">
+
+    <!-- ==================== MINIMAL HEADER ==================== -->
+    <header class="w-full max-w-2xl mx-auto px-4 pt-3 pb-1 flex items-center justify-between z-20">
+        <div class="flex items-center gap-2.5">
+            <button id="btnBackToLobby" onclick="app.confirmLeaveGame()" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-xs font-semibold hover:opacity-80 active:scale-95 transition shadow-sm">
+                <i class="ph-bold ph-arrow-right text-sm"></i>
+                <span>لابی</span>
+            </button>
+
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-sm">
+                <div class="flex items-center -space-x-1 rtl:space-x-reverse">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block ring-2 ring-[var(--surface-card)]"></span>
+                </div>
+                <span class="font-mono-en font-extrabold text-xs tracking-widest">STENKA</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <!-- Active Room Pill -->
+            <button id="networkBadge" onclick="app.copyRoomCode()" class="hidden items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-xs font-semibold shadow-sm hover:opacity-80 transition" title="کلیک برای کپی کد اتاق">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="networkRoomText" class="font-mono-en font-bold">----</span>
+                <i class="ph ph-copy text-xs text-[var(--text-secondary)]"></i>
+            </button>
+
+            <!-- Guide Button -->
+            <button onclick="app.toggleHelpModal(true)" class="w-8 h-8 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm transition" title="راهنمای بازی">
+                <i class="ph-bold ph-question text-sm"></i>
+            </button>
+
+            <!-- Sound Button -->
+            <button onclick="app.toggleSound()" class="w-8 h-8 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm transition" title="صدا">
+                <i id="iconSound" class="ph-bold ph-speaker-high text-sm"></i>
+            </button>
+
+            <!-- Theme Button -->
+            <button onclick="app.toggleTheme()" class="w-8 h-8 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] shadow-sm transition" title="تغییر پوسته">
+                <i id="iconTheme" class="ph-bold ph-moon text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN WORKSPACE ==================== -->
+    <main class="flex-1 flex flex-col items-center justify-center w-full max-w-2xl mx-auto px-3 py-2 relative">
+
+        <!-- ==================== SCREEN 1: MINIMAL LOBBY ==================== -->
+        <section id="screenLobby" class="w-full max-w-md mx-auto my-auto">
+            <div class="bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-3xl p-6 shadow-sm space-y-5">
+                
+                <!-- Header -->
+                <div class="space-y-1 text-center">
+                    <div class="font-mono-en text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)]">TACTICAL GRID RACE</div>
+                    <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">استنکا — نبرد استراتژیک دیوارها</h1>
+                    <p class="text-xs text-[var(--text-secondary)]">مسیر خود را بسازید و راه حریف را با دیوارهای هوشمند ببندید</p>
+                </div>
+
+                <!-- Nickname Field -->
+                <div class="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]">
+                    <span class="text-xs font-semibold text-[var(--text-secondary)]">نام بازیکن</span>
+                    <input id="inputPlayerName" type="text" maxlength="14" placeholder="USER4376"
+                        class="bg-transparent text-left font-mono-en font-bold text-xs sm:text-sm text-[var(--text-primary)] focus:outline-none w-40" />
+                </div>
+
+                <!-- Connection Type Segmented Control -->
+                <div class="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]">
+                    <button id="tabOnline" onclick="app.switchLobbyTab('online')" class="py-2 px-3 rounded-xl font-bold text-xs transition bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm">
+                        بازی آنلاین (اتاق گروهی)
+                    </button>
+                    <button id="tabLocal" onclick="app.switchLobbyTab('local')" class="py-2 px-3 rounded-xl font-bold text-xs transition text-[var(--text-secondary)]">
+                        تک‌نفره (هوش مصنوعی) / حضوری
+                    </button>
+                </div>
+
+                <!-- Game Mode Selector (Clean Minimal Grid) -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-[var(--text-secondary)]">حالت بازی</span>
+                        <span id="modeSubHint" class="text-[11px] text-[var(--text-muted)]">شروع از پایین، مسابقه تا خط پایان بالا</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2" id="modeCardsContainer">
+                        <button onclick="app.selectGameMode('classic')" data-mode="classic" class="mode-card text-right p-3 rounded-2xl border transition flex flex-col gap-1 border-zinc-900 dark:border-white bg-[var(--surface-muted)]">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs">کلاسیک (Stenka)</span>
+                                <i class="ph-bold ph-flag-checkered text-sm"></i>
+                            </div>
+                            <span class="text-[11px] text-[var(--text-secondary)] leading-snug">مسابقه همزمان از پایین صفحه تا خط پایان</span>
+                        </button>
+
+                        <button onclick="app.selectGameMode('quoridor')" data-mode="quoridor" class="mode-card text-right p-3 rounded-2xl border border-[var(--border-subtle)] hover:border-zinc-400 transition flex flex-col gap-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs">رو در رو (Quoridor)</span>
+                                <i class="ph-bold ph-arrows-in-line-vertical text-sm"></i>
+                            </div>
+                            <span class="text-[11px] text-[var(--text-secondary)] leading-snug">شروع در ضلع‌های مقابل؛ رسیدن به ضلع حریف</span>
+                        </button>
+
+                        <button onclick="app.selectGameMode('powerup')" data-mode="powerup" class="mode-card text-right p-3 rounded-2xl border border-[var(--border-subtle)] hover:border-zinc-400 transition flex flex-col gap-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs">پالس تاکتیکی (Tactical)</span>
+                                <i class="ph-bold ph-lightning text-sm"></i>
+                            </div>
+                            <span class="text-[11px] text-[var(--text-secondary)] leading-snug">گره‌های حرکت اضافه، پرش از دیوار، دیوارشکن و تله‌پورت</span>
+                        </button>
+
+                        <button onclick="app.selectGameMode('blitz')" data-mode="blitz" class="mode-card text-right p-3 rounded-2xl border border-[var(--border-subtle)] hover:border-zinc-400 transition flex flex-col gap-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs">بلیتز (Speed Lockdown)</span>
+                                <i class="ph-bold ph-timer text-sm"></i>
+                            </div>
+                            <span class="text-[11px] text-[var(--text-secondary)] leading-snug">تایمر ۱۲ ثانیه‌ای + انسداد تدریجی ردیف‌های پایین</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Player Count & Wall Limit -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="p-2.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-1.5">
+                        <div class="text-[11px] font-semibold text-[var(--text-secondary)]">تعداد بازیکنان</div>
+                        <div class="grid grid-cols-3 gap-1" id="playerCountBtns">
+                            <button onclick="app.setPlayerCount(2)" data-count="2" class="py-1.5 rounded-xl font-bold text-xs bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">۲ نفر</button>
+                            <button onclick="app.setPlayerCount(3)" data-count="3" class="py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]">۳ نفر</button>
+                            <button onclick="app.setPlayerCount(4)" data-count="4" class="py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]">۴ نفر</button>
+                        </div>
+                    </div>
+
+                    <div class="p-2.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-1.5">
+                        <div class="text-[11px] font-semibold text-[var(--text-secondary)]">تعداد دیوار هر نفر</div>
+                        <div class="grid grid-cols-3 gap-1" id="wallLimitBtns">
+                            <button onclick="app.setWallLimit(99)" data-limit="99" class="py-1.5 rounded-xl font-bold text-xs bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">آزاد</button>
+                            <button onclick="app.setWallLimit(10)" data-limit="10" class="py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]">۱۰ عدد</button>
+                            <button onclick="app.setWallLimit(6)" data-limit="6" class="py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]">۶ عدد</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Online Room Actions -->
+                <div id="panelOnlineControls" class="space-y-2.5 pt-1">
+                    <button onclick="app.createOnlineRoom()" class="w-full py-3.5 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                        <i class="ph-bold ph-plus text-base"></i>
+                        <span>ساخت اتاق آنلاین جدید</span>
+                    </button>
+
+                    <div class="flex items-center gap-2 p-1.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]">
+                        <input id="inputJoinCode" type="text" maxlength="6" placeholder="کد اتاق (مثلاً A4F9)"
+                            class="flex-1 bg-transparent px-3 py-1.5 text-center font-mono-en font-bold uppercase text-xs sm:text-sm text-[var(--text-primary)] focus:outline-none" />
+                        <button onclick="app.joinOnlineRoom()" class="px-4 py-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] hover:border-zinc-400 font-bold text-xs shadow-sm transition">
+                            ورود به اتاق
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Local / AI Actions -->
+                <div id="panelLocalControls" class="hidden space-y-2.5 pt-1">
+                    <div class="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]">
+                        <span class="text-xs font-semibold text-[var(--text-secondary)]">نوع حریف</span>
+                        <div class="flex items-center gap-1">
+                            <button id="btnBotModeYes" onclick="app.setBotMode(true)" class="px-3 py-1 rounded-xl text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">هوش مصنوعی</button>
+                            <button id="btnBotModeNo" onclick="app.setBotMode(false)" class="px-3 py-1 rounded-xl text-xs font-bold text-[var(--text-secondary)]">دو بازیکن حضوری</button>
+                        </div>
+                    </div>
+
+                    <button onclick="app.startLocalGame()" class="w-full py-3.5 px-4 rounded-2xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                        <i class="ph-bold ph-play text-base"></i>
+                        <span>شروع بازی</span>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==================== SCREEN 2: WAITING ROOM ==================== -->
+        <section id="screenWaitingRoom" class="hidden w-full max-w-md mx-auto my-auto">
+            <div class="bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-3xl p-6 shadow-sm space-y-5 text-center">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>اتاق فعال است</span>
+                </div>
+
+                <div class="space-y-1">
+                    <h2 class="text-lg font-extrabold">دعوت از دوستان</h2>
+                    <p class="text-xs text-[var(--text-secondary)]">کد زیر یا لینک مستقیم را برای هم‌تیمی‌های خود ارسال کنید</p>
+                </div>
+
+                <!-- Code Box -->
+                <div class="p-4 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-3">
+                    <div id="waitingRoomCodeDisplay" class="font-mono-en text-3xl font-extrabold tracking-[0.25em] select-all">----</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="app.copyRoomCode()" class="py-2 px-3 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-80 transition">
+                            <i class="ph-bold ph-copy"></i>
+                            <span>کپی کد</span>
+                        </button>
+                        <button onclick="app.copyInviteLink()" class="py-2 px-3 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition">
+                            <i class="ph-bold ph-link"></i>
+                            <span>کپی لینک دعوت</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Players List -->
+                <div class="space-y-2 text-right">
+                    <div class="flex items-center justify-between text-xs font-bold text-[var(--text-secondary)]">
+                        <span>بازیکنان متصل</span>
+                        <span id="waitingPlayerCountLabel" class="font-mono-en">1 / 2</span>
+                    </div>
+                    <div id="waitingPlayersList" class="space-y-1.5"></div>
+                </div>
+
+                <!-- Host Controls -->
+                <div class="space-y-2 pt-1">
+                    <button id="btnHostAddBot" onclick="app.hostFillWithBot()" class="w-full py-2.5 px-4 rounded-xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-80 transition">
+                        <i class="ph-bold ph-cpu"></i>
+                        <span>افزودن ربات به جای خالی</span>
+                    </button>
+                    <button id="btnHostStartOnline" onclick="app.hostStartMatch()" class="w-full py-3.5 px-6 rounded-2xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs sm:text-sm disabled:opacity-40 transition">
+                        شروع مسابقه
+                    </button>
+                    <p id="guestWaitingHint" class="hidden text-xs font-semibold text-[var(--text-secondary)] animate-pulse">منتظر شروع مسابقه توسط میزبان...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== SCREEN 3: GAME BOARD ==================== -->
+        <section id="screenGame" class="hidden w-full flex flex-col items-center justify-center my-auto select-none">
+
+            <!-- Top Finish Header (Matches Screenshot Minimalist Aesthetic) -->
+            <div class="w-full max-w-[400px] flex items-center justify-center gap-3.5 mb-2 px-2">
+                <div class="h-[1.5px] flex-1 bg-emerald-600/50 rounded-full"></div>
+                <div class="flex items-center gap-1.5 font-mono-en text-[11px] sm:text-xs font-bold tracking-[0.22em] text-emerald-700 dark:text-emerald-400 uppercase">
+                    <span>🏁</span>
+                    <span id="topGoalText">FINISH</span>
+                </div>
+                <div class="h-[1.5px] flex-1 bg-emerald-600/50 rounded-full"></div>
+            </div>
+
+            <!-- Minimal Status & Tool Strip -->
+            <div class="w-full max-w-[400px] mb-2 flex items-center justify-between px-3 py-2 rounded-2xl bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-sm">
+                <div class="flex items-center gap-2">
+                    <span id="turnPawnDot" class="w-3 h-3 rounded-full pawn-p0 inline-block"></span>
+                    <span id="turnStatusText" class="text-xs font-bold">نوبت شما</span>
+                    <span id="extraActionBadge" class="hidden px-2 py-0.5 text-[10px] rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 font-bold">+۱ نوبت اضافه</span>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <!-- Blitz Timer -->
+                    <div id="blitzTimerBadge" class="hidden items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 font-mono-en font-bold text-xs">
+                        <i class="ph-bold ph-timer text-xs"></i>
+                        <span id="blitzSeconds">12s</span>
+                    </div>
+
+                    <!-- Wall Dissolve Powerup Button -->
+                    <button id="btnBreakerTool" onclick="app.toggleWallBreakerMode()" class="hidden items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold text-[11px] transition">
+                        <i class="ph-bold ph-hammer text-xs"></i>
+                        <span>حذف دیوار (<span id="breakerCount">0</span>)</span>
+                    </button>
+
+                    <!-- Orientation Lock / Switcher -->
+                    <button id="btnOrientToggle" onclick="app.cycleOrientationPreference()" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[11px] font-bold hover:opacity-80 transition" title="تغییر جهت دیوار (کلید Space یا R)">
+                        <i id="iconOrient" class="ph-bold ph-magic-wand text-xs"></i>
+                        <span id="textOrient">جهت خودکار</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- THE ARCHITECTURAL BOARD (9 Cols x 12 Rows) -->
+            <div id="boardOuterFrame" class="board-shell w-full max-w-[400px]">
+                <div id="boardInnerWell" class="board-canvas w-full aspect-[9/12] relative">
+                    
+                    <!-- Top Finish Zone Highlight -->
+                    <div id="finishZoneOverlay" class="finish-zone absolute top-0 left-0 right-0 h-[8.3333%] pointer-events-none z-0"></div>
+
+                    <!-- Interactive Stage -->
+                    <div id="boardStage" class="w-full h-full relative touch-none"></div>
+
+                    <!-- Floating Reaction Layer -->
+                    <div id="emojiFloatLayer" class="absolute inset-0 pointer-events-none overflow-hidden z-40"></div>
+
+                    <!-- Sleek Floating Wall Precision Bar (Appears when a wall is selected on touch / precision mode) -->
+                    <div id="wallConfirmPill" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-zinc-900/95 dark:bg-zinc-100/95 text-white dark:text-zinc-900 px-2.5 py-1.5 rounded-2xl shadow-xl border border-white/10 backdrop-blur-md">
+                        <button onclick="app.confirmPendingWall()" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs flex items-center gap-1">
+                            <i class="ph-bold ph-check"></i>
+                            <span>تایید</span>
+                        </button>
+                        <button onclick="app.rotatePendingWall()" class="px-2.5 py-1.5 rounded-xl bg-white/10 dark:bg-zinc-900/10 hover:bg-white/20 font-bold text-xs flex items-center gap-1" title="چرخش ۹۰ درجه">
+                            <i class="ph-bold ph-arrows-clockwise"></i>
+                            <span>چرخش</span>
+                        </button>
+                        <div class="h-4 w-[1px] bg-white/20 dark:bg-zinc-900/20 mx-0.5"></div>
+                        <button onclick="app.nudgePendingWall(0, -1)" class="w-7 h-7 rounded-lg bg-white/10 dark:bg-zinc-900/10 flex items-center justify-center text-xs" title="چپ"><i class="ph-bold ph-caret-left"></i></button>
+                        <button onclick="app.nudgePendingWall(-1, 0)" class="w-7 h-7 rounded-lg bg-white/10 dark:bg-zinc-900/10 flex items-center justify-center text-xs" title="بالا"><i class="ph-bold ph-caret-up"></i></button>
+                        <button onclick="app.nudgePendingWall(1, 0)" class="w-7 h-7 rounded-lg bg-white/10 dark:bg-zinc-900/10 flex items-center justify-center text-xs" title="پایین"><i class="ph-bold ph-caret-down"></i></button>
+                        <button onclick="app.nudgePendingWall(0, 1)" class="w-7 h-7 rounded-lg bg-white/10 dark:bg-zinc-900/10 flex items-center justify-center text-xs" title="راست"><i class="ph-bold ph-caret-right"></i></button>
+                        <button onclick="app.cancelPendingWall()" class="w-7 h-7 rounded-lg text-rose-400 hover:bg-rose-500/20 flex items-center justify-center text-xs" title="انصراف">
+                            <i class="ph-bold ph-x"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interaction Mode Dock (Solves Wall vs Pawn Placement Precision) -->
+            <div class="w-full max-w-[400px] mt-2.5 space-y-2">
+                <div class="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-sm">
+                    <button id="toolModeAuto" onclick="app.setToolMode('auto')" class="py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 transition">
+                        <i class="ph-bold ph-cursor-click text-xs"></i>
+                        <span>هوشمند (حرکت + دیوار)</span>
+                    </button>
+                    <button id="toolModeWall" onclick="app.setToolMode('wall')" class="py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+                        <i class="ph-bold ph-wall text-xs"></i>
+                        <span>فقط دیوارگذاری دقیق</span>
+                    </button>
+                    <button id="toolModeMove" onclick="app.setToolMode('move')" class="py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+                        <i class="ph-bold ph-arrows-out-cardinal text-xs"></i>
+                        <span>فقط حرکت مهره</span>
+                    </button>
+                </div>
+
+                <!-- Minimalist Player Footer matching Screenshot: ── ▲ USER4376 · STENKA72 ── -->
+                <div class="flex items-center justify-between gap-2 pt-0.5 px-1">
+                    <div class="h-[1.5px] w-10 bg-zinc-400/50 rounded-full"></div>
+                    <div id="playersHudStrip" class="flex-1 flex flex-wrap items-center justify-center gap-2 text-xs font-mono-en font-bold tracking-wider"></div>
+                    <div class="h-[1.5px] w-10 bg-zinc-400/50 rounded-full"></div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- ==================== VICTORY MODAL ==================== -->
+    <div id="modalVictory" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-3xl max-w-xs w-full p-6 text-center shadow-2xl space-y-4">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-2xl">
+                <i class="ph-bold ph-trophy"></i>
+            </div>
+            <div class="space-y-1">
+                <div class="font-mono-en text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">MATCH COMPLETE</div>
+                <h3 id="victoryTitle" class="text-xl font-extrabold">بازیکن برنده شد</h3>
+                <p id="victorySub" class="text-xs text-[var(--text-secondary)]">با موفقیت به خط پایان رسید.</p>
+            </div>
+            <div class="flex flex-col gap-2 pt-1">
+                <button onclick="app.rematchGame()" class="w-full py-3 rounded-2xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs">
+                    مسابقه مجدد (Rematch)
+                </button>
+                <button onclick="app.returnToLobby()" class="w-full py-2.5 rounded-2xl bg-[var(--surface-muted)] text-[var(--text-secondary)] font-bold text-xs">
+                    بازگشت به لابی
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== HELP MODAL ==================== -->
+    <div id="modalHelp" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+                <h3 class="text-base font-extrabold">راهنمای بازی و دیوارگذاری دقیق</h3>
+                <button onclick="app.toggleHelpModal(false)" class="w-7 h-7 rounded-lg bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-secondary)]">
+                    <i class="ph-bold ph-x text-xs"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed">
+                <div class="p-3 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-1">
+                    <div class="font-bold text-[var(--text-primary)]">۱. نحوه گذاشتن دقیق و راحت دیوار:</div>
+                    <p>نشانگر موس یا انگشت خود را روی هر <strong>خط افقی یا عمودی</strong> بین خانه‌ها ببرید؛ پیش‌نمایش دیوار به صورت <strong>مغناطیسی</strong> دقیقاً روی همان خط می‌چسبد و جهت آن (افقی/عمودی) به طور خودکار تشخیص داده می‌شود.</p>
+                    <p>در موبایل می‌توانید انگشت خود را روی صفحه بکشید تا دیوار جابه‌جا شود و با دکمه‌های جهت‌دار کوچک، مکان آن را یک واحد تنظیم و تایید کنید.</p>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-1">
+                    <div class="font-bold text-[var(--text-primary)]">۲. قوانین حرکت و مسدودسازی:</div>
+                    <p>در هر نوبت یا مهره خود را ۱ خانه حرکت دهید (امکان پرش از روی مهره حریف وجود دارد) یا یک دیوار ۲ واحدی قرار دهید. بستن ۱۰۰٪ تمامی مسیرهای حریف به خط پایان مجاز نیست.</p>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-1">
+                    <div class="font-bold text-[var(--text-primary)]">۳. اجرا روی GitHub Pages:</div>
+                    <p>این فایل تک‌صفحه‌ای با نام <code>index.html</code> بدون نیاز به سرور بک‌اند، از طریق WebRTC (PeerJS) امکان ساخت اتاق و بازی آنلاین با کد ۴ حرفی را فراهم می‌کند.</p>
+                </div>
+            </div>
+
+            <button onclick="app.toggleHelpModal(false)" class="w-full py-3 rounded-2xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold text-xs">
+                بستن راهنما
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== CONFIRM LEAVE MODAL ==================== -->
+    <div id="modalConfirmLeave" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-3xl max-w-xs w-full p-5 text-center space-y-4 shadow-2xl">
+            <div class="font-extrabold text-sm">خروج از مسابقه فعلی؟</div>
+            <p class="text-xs text-[var(--text-secondary)]">با بازگشت به لابی، بازی فعلی پایان می‌یابد.</p>
+            <div class="flex gap-2">
+                <button onclick="app.returnToLobby()" class="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs">خروج</button>
+                <button onclick="document.getElementById('modalConfirmLeave').classList.add('hidden')" class="flex-1 py-2.5 rounded-xl bg-[var(--surface-muted)] text-[var(--text-primary)] font-bold text-xs">ادامه بازی</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MINIMAL TOAST ==================== -->
+    <div id="toastBox" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-200 opacity-0 translate-y-2">
+        <div class="px-4 py-2 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs shadow-lg flex items-center gap-2">
+            <span id="toastText">پیام</span>
+        </div>
+    </div>
+
+    <!-- ==================== GAME ENGINE ==================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Subtle Tactile Audio Synth
+        class SoundEffects {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+            }
+            playTone(freq, type = 'sine', duration = 0.08, vol = 0.1, slideFreq = null) {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    if (!this.ctx) return;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    if (slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, this.ctx.currentTime + duration);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+            move() { this.playTone(380, 'sine', 0.07, 0.12, 520); }
+            wall() { this.playTone(220, 'triangle', 0.09, 0.16, 160); }
+            snap() { this.playTone(600, 'sine', 0.025, 0.03); }
+            powerup() { this.playTone(540, 'sine', 0.12, 0.12, 820); }
+            error() { this.playTone(150, 'sawtooth', 0.15, 0.1, 120); }
+            win() {
+                [440, 554, 659, 880].forEach((f, idx) => {
+                    setTimeout(() => this.playTone(f, 'triangle', 0.18, 0.14), idx * 95);
+                });
+            }
+        }
+
+        const sfx = new SoundEffects();
+
+        const PLAYER_STYLES = [
+            { id: 0, colorName: 'قرمز', pawnClass: 'pawn-p0', wallClass: 'wall-p0', hex: '#E11D48' },
+            { id: 1, colorName: 'آبی', pawnClass: 'pawn-p1', wallClass: 'wall-p1', hex: '#2563EB' },
+            { id: 2, colorName: 'سبز', pawnClass: 'pawn-p2', wallClass: 'wall-p2', hex: '#059669' },
+            { id: 3, colorName: 'کهربایی', pawnClass: 'pawn-p3', wallClass: 'wall-p3', hex: '#D97706' }
+        ];
+
+        const COLS = 9;
+        const ROWS = 12;
+
+        class StenkaApp {
+            constructor() {
+                this.lobbyTab = 'online';
+                this.selectedMode = 'classic';
+                this.desiredPlayerCount = 2;
+                this.desiredWallLimit = 99;
+                this.useBotsInLocal = true;
+
+                // Interaction & Wall Placement Precision Settings
+                this.toolMode = 'auto';          // 'auto' | 'wall' | 'move'
+                this.orientPref = 'auto';        // 'auto' (snaps to nearest H or V line) | 'h' | 'v'
+                this.hoverWall = null;           // { type: 'h'|'v', r, c, valid: bool }
+                this.pendingWall = null;         // { type: 'h'|'v', r, c } for touch / step confirmation
+                this.isPointerDragging = false;
+                this.breakerModeActive = false;
+
+                // Player Identity
+                this.localPeerId = 'u_' + Math.random().toString(36).substring(2, 9);
+                this.playerName = 'USER' + Math.floor(1000 + Math.random() * 9000);
+                document.getElementById('inputPlayerName').value = this.playerName;
+
+                // Networking
+                this.isOnlineMatch = false;
+                this.isHost = false;
+                this.roomCode = null;
+                this.mySlotIndex = 0;
+                this.peer = null;
+                this.hostConnections = [];
+                this.clientConn = null;
+
+                // Optional Firebase Sync
+                this.db = null;
+                this.auth = null;
+                this.fbUser = null;
+                this.fbUnsub = null;
+                this.appId = typeof __app_id !== 'undefined' ? __app_id : 'stenka-pro-app';
+
+                this.state = null;
+                this.blitzInterval = null;
+                this.botTimeout = null;
+
+                this.initFirebaseIfAvailable();
+                this.bindGlobalShortcuts();
+                this.bindBoardPointerEvents();
+                this.checkUrlInviteParams();
+            }
+
+            async initFirebaseIfAvailable() {
+                try {
+                    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                        const config = JSON.parse(__firebase_config);
+                        const fbApp = initializeApp(config);
+                        this.auth = getAuth(fbApp);
+                        this.db = getFirestore(fbApp);
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(this.auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(this.auth);
+                        }
+                        onAuthStateChanged(this.auth, (u) => { this.fbUser = u; });
+                    }
+                } catch (e) {}
+            }
+
+            bindGlobalShortcuts() {
+                window.addEventListener('keydown', (e) => {
+                    if (!this.state || this.state.status !== 'playing') return;
+                    if (e.key.toLowerCase() === 'r' || e.code === 'Space') {
+                        e.preventDefault();
+                        if (this.pendingWall) {
+                            this.rotatePendingWall();
+                        } else {
+                            this.cycleOrientationPreference();
+                        }
+                    } else if (e.key === 'Enter' && this.pendingWall) {
+                        e.preventDefault();
+                        this.confirmPendingWall();
+                    } else if (e.key === 'Escape' && this.pendingWall) {
+                        e.preventDefault();
+                        this.cancelPendingWall();
+                    }
+                });
+            }
+
+            // =========================================================================
+            // PRECISION MAGNETIC WALL SNAPPING & POINTER TRACKING ON THE BOARD
+            // =========================================================================
+            bindBoardPointerEvents() {
+                const stage = document.getElementById('boardStage');
+
+                // Continuous Mouse / Touch Move Tracking
+                stage.addEventListener('pointermove', (e) => {
+                    if (!this.state || this.state.status !== 'playing' || !this.isMyTurn()) return;
+                    if (this.breakerModeActive || this.toolMode === 'move') {
+                        if (this.hoverWall) {
+                            this.hoverWall = null;
+                            this.updateGhostWallDOM();
+                        }
+                        return;
+                    }
+
+                    const isTouch = e.pointerType === 'touch';
+                    if (isTouch && !this.isPointerDragging) return;
+
+                    const snapped = this.computeMagneticWallFromPointer(e.clientX, e.clientY);
+                    if (isTouch && snapped) {
+                        if (!this.pendingWall || this.pendingWall.type !== snapped.type || this.pendingWall.r !== snapped.r || this.pendingWall.c !== snapped.c) {
+                            this.pendingWall = { type: snapped.type, r: snapped.r, c: snapped.c };
+                            sfx.snap();
+                            this.updateGhostWallDOM();
+                            this.updateConfirmPillUI();
+                        }
+                    } else {
+                        const prev = this.hoverWall;
+                        this.hoverWall = snapped;
+                        if (!prev || !snapped || prev.type !== snapped.type || prev.r !== snapped.r || prev.c !== snapped.c) {
+                            this.updateGhostWallDOM();
+                        }
+                    }
+                });
+
+                stage.addEventListener('pointerleave', () => {
+                    if (this.hoverWall) {
+                        this.hoverWall = null;
+                        this.updateGhostWallDOM();
+                    }
+                });
+
+                stage.addEventListener('pointerdown', (e) => {
+                    if (!this.state || this.state.status !== 'playing' || !this.isMyTurn()) return;
+                    if (this.breakerModeActive) return;
+
+                    const isTouch = e.pointerType === 'touch';
+                    const moveTarget = this.getMoveTargetAtPointer(e.clientX, e.clientY);
+
+                    // 1. If user clicked/tapped directly inside a valid move cell (and not in Wall-Only mode)
+                    if (moveTarget && this.toolMode !== 'wall') {
+                        // In 'auto' mode, check if pointer is closer to the center of the move cell or very close to a wall line
+                        const distToCellCenter = moveTarget.centerDist;
+                        if (this.toolMode === 'move' || distToCellCenter < 0.34) {
+                            this.executeMove(moveTarget.r, moveTarget.c, moveTarget.usedJumpCharge);
+                            return;
+                        }
+                    }
+
+                    if (this.toolMode === 'move') return;
+
+                    // 2. Otherwise, handle Wall Placement!
+                    const currentP = this.state.players[this.state.turnIndex];
+                    if (currentP.wallsLeft <= 0) {
+                        sfx.error();
+                        this.showToast('دیوارهای شما تمام شده است؛ مهره خود را حرکت دهید');
+                        return;
+                    }
+
+                    const snapped = this.computeMagneticWallFromPointer(e.clientX, e.clientY);
+                    if (!snapped) return;
+
+                    if (isTouch) {
+                        // On touch: if tapping the exact same pending wall a second time, confirm immediately!
+                        if (this.pendingWall && this.pendingWall.type === snapped.type && this.pendingWall.r === snapped.r && this.pendingWall.c === snapped.c && snapped.valid) {
+                            this.confirmPendingWall();
+                            return;
+                        }
+                        this.isPointerDragging = true;
+                        this.pendingWall = { type: snapped.type, r: snapped.r, c: snapped.c };
+                        sfx.snap();
+                        this.updateGhostWallDOM();
+                        this.updateConfirmPillUI();
+                    } else {
+                        // On desktop mouse: immediate, crisp placement on click!
+                        this.executePlaceWall(snapped.type, snapped.r, snapped.c);
+                    }
+                });
+
+                window.addEventListener('pointerup', () => {
+                    this.isPointerDragging = false;
+                });
+            }
+
+            // Calculate if pointer is inside a valid move cell and how close to its center
+            getMoveTargetAtPointer(clientX, clientY) {
+                const stage = document.getElementById('boardStage');
+                const rect = stage.getBoundingClientRect();
+                if (!rect.width || !rect.height) return null;
+
+                const gx = ((clientX - rect.left) / rect.width) * COLS;
+                const gy = ((clientY - rect.top) / rect.height) * ROWS;
+                const cellC = Math.floor(gx);
+                const cellR = Math.floor(gy);
+
+                const validMoves = this.getValidMovesForPlayer(this.state.turnIndex);
+                const found = validMoves.find(m => m.r === cellR && m.c === cellC);
+                if (!found) return null;
+
+                const centerDist = Math.hypot(gx - (cellC + 0.5), gy - (cellR + 0.5));
+                return { ...found, centerDist };
+            }
+
+            // Compute the exact 2-unit wall segment nearest to the user's pointer
+            computeMagneticWallFromPointer(clientX, clientY) {
+                const stage = document.getElementById('boardStage');
+                const rect = stage.getBoundingClientRect();
+                if (!rect.width || !rect.height) return null;
+
+                const gx = ((clientX - rect.left) / rect.width) * COLS;
+                const gy = ((clientY - rect.top) / rect.height) * ROWS;
+
+                if (gx < -0.2 || gx > COLS + 0.2 || gy < -0.2 || gy > ROWS + 0.2) return null;
+
+                // Nearest internal horizontal line index (1 .. ROWS-1) -> wall r = lineR - 1
+                const lineR = Math.max(1, Math.min(ROWS - 1, Math.round(gy)));
+                const distH = Math.abs(gy - lineR);
+
+                // Nearest internal vertical line index (1 .. COLS-1) -> wall c = lineC - 1
+                const lineC = Math.max(1, Math.min(COLS - 1, Math.round(gx)));
+                const distV = Math.abs(gx - lineC);
+
+                // In 'auto' tool mode, if pointer is right in the middle of a valid move cell, hide wall ghost so move click is clean
+                if (this.toolMode === 'auto') {
+                    const moveTarget = this.getMoveTargetAtPointer(clientX, clientY);
+                    if (moveTarget && moveTarget.centerDist < 0.30) {
+                        return null;
+                    }
+                }
+
+                // Determine orientation: auto-detect by proximity to H or V line, or use locked preference
+                let type = 'h';
+                if (this.orientPref === 'h') type = 'h';
+                else if (this.orientPref === 'v') type = 'v';
+                else type = distH <= distV ? 'h' : 'v';
+
+                let r, c;
+                if (type === 'h') {
+                    r = lineR - 1;
+                    // Center the 2-unit wall on cursor gx
+                    c = Math.max(0, Math.min(COLS - 2, Math.round(gx - 1)));
+
+                    // Smart Auto-Shift: if (r, c) overlaps an existing wall segment, check if shifting by 1 cell still covers cursor column and is valid!
+                    if (!this.canPlaceWall('h', r, c).ok) {
+                        const cursorCol = Math.max(0, Math.min(COLS - 1, Math.floor(gx)));
+                        const altC1 = cursorCol;
+                        const altC2 = cursorCol - 1;
+                        if (altC1 >= 0 && altC1 <= COLS - 2 && this.canPlaceWall('h', r, altC1).ok) {
+                            c = altC1;
+                        } else if (altC2 >= 0 && altC2 <= COLS - 2 && this.canPlaceWall('h', r, altC2).ok) {
+                            c = altC2;
+                        }
+                    }
+                } else {
+                    c = lineC - 1;
+                    // Center the 2-unit wall on cursor gy
+                    r = Math.max(0, Math.min(ROWS - 2, Math.round(gy - 1)));
+
+                    // Smart Auto-Shift along vertical line
+                    if (!this.canPlaceWall('v', r, c).ok) {
+                        const cursorRow = Math.max(0, Math.min(ROWS - 1, Math.floor(gy)));
+                        const altR1 = cursorRow;
+                        const altR2 = cursorRow - 1;
+                        if (altR1 >= 0 && altR1 <= ROWS - 2 && this.canPlaceWall('v', altR1, c).ok) {
+                            r = altR1;
+                        } else if (altR2 >= 0 && altR2 <= ROWS - 2 && this.canPlaceWall('v', altR2, c).ok) {
+                            r = altR2;
+                        }
+                    }
+                }
+
+                const check = this.canPlaceWall(type, r, c);
+                return { type, r, c, valid: check.ok, reason: check.reason };
+            }
+
+            setToolMode(mode) {
+                this.toolMode = mode;
+                this.hoverWall = null;
+                if (mode === 'move') this.pendingWall = null;
+
+                const activeCls = 'py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 transition';
+                const idleCls = 'py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition';
+
+                document.getElementById('toolModeAuto').className = mode === 'auto' ? activeCls : idleCls;
+                document.getElementById('toolModeWall').className = mode === 'wall' ? activeCls : idleCls;
+                document.getElementById('toolModeMove').className = mode === 'move' ? activeCls : idleCls;
+
+                this.renderBoard();
+            }
+
+            cycleOrientationPreference() {
+                if (this.orientPref === 'auto') this.orientPref = 'h';
+                else if (this.orientPref === 'h') this.orientPref = 'v';
+                else this.orientPref = 'auto';
+
+                const iconEl = document.getElementById('iconOrient');
+                const textEl = document.getElementById('textOrient');
+
+                if (this.orientPref === 'auto') {
+                    iconEl.className = 'ph-bold ph-magic-wand text-xs';
+                    textEl.textContent = 'جهت خودکار';
+                } else if (this.orientPref === 'h') {
+                    iconEl.className = 'ph-bold ph-arrows-horizontal text-xs';
+                    textEl.textContent = 'قفل افقی';
+                } else {
+                    iconEl.className = 'ph-bold ph-arrows-vertical text-xs';
+                    textEl.textContent = 'قفل عمودی';
+                }
+
+                if (this.pendingWall && this.orientPref !== 'auto') {
+                    this.pendingWall.type = this.orientPref;
+                    this.updateGhostWallDOM();
+                }
+            }
+
+            nudgePendingWall(dr, dc) {
+                if (!this.pendingWall) return;
+                const nr = Math.max(0, Math.min(ROWS - 2, this.pendingWall.r + dr));
+                const nc = Math.max(0, Math.min(COLS - 2, this.pendingWall.c + dc));
+                this.pendingWall.r = nr;
+                this.pendingWall.c = nc;
+                sfx.snap();
+                this.updateGhostWallDOM();
+            }
+
+            rotatePendingWall() {
+                if (!this.pendingWall) return;
+                this.pendingWall.type = this.pendingWall.type === 'h' ? 'v' : 'h';
+                sfx.snap();
+                this.updateGhostWallDOM();
+            }
+
+            confirmPendingWall() {
+                if (!this.pendingWall || !this.isMyTurn()) return;
+                this.executePlaceWall(this.pendingWall.type, this.pendingWall.r, this.pendingWall.c);
+            }
+
+            cancelPendingWall() {
+                this.pendingWall = null;
+                this.updateGhostWallDOM();
+                this.updateConfirmPillUI();
+            }
+
+            updateConfirmPillUI() {
+                const pill = document.getElementById('wallConfirmPill');
+                pill.classList.toggle('hidden', !this.pendingWall || !this.isMyTurn());
+            }
+
+            // =========================================================================
+            // UI & LOBBY CONTROLS
+            // =========================================================================
+            checkUrlInviteParams() {
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('room');
+                if (code && code.trim().length >= 3) {
+                    document.getElementById('inputJoinCode').value = code.trim().toUpperCase();
+                    this.switchLobbyTab('online');
+                    this.showToast(`کد اتاق ${code.toUpperCase()} آماده ورود است`);
+                }
+            }
+
+            toggleTheme() {
+                const html = document.documentElement;
+                html.classList.toggle('dark');
+                const isDark = html.classList.contains('dark');
+                document.getElementById('iconTheme').className = isDark ? 'ph-bold ph-sun text-sm' : 'ph-bold ph-moon text-sm';
+            }
+
+            toggleSound() {
+                sfx.enabled = !sfx.enabled;
+                document.getElementById('iconSound').className = sfx.enabled
+                    ? 'ph-bold ph-speaker-high text-sm'
+                    : 'ph-bold ph-speaker-slash text-sm opacity-50';
+                this.showToast(sfx.enabled ? 'صدا فعال شد' : 'صدا غیرفعال شد');
+            }
+
+            toggleHelpModal(show) {
+                document.getElementById('modalHelp').classList.toggle('hidden', !show);
+            }
+
+            showToast(msg) {
+                const box = document.getElementById('toastBox');
+                document.getElementById('toastText').textContent = msg;
+                box.classList.remove('opacity-0', 'translate-y-2');
+                box.classList.add('opacity-100', 'translate-y-0');
+                clearTimeout(this._toastTimer);
+                this._toastTimer = setTimeout(() => {
+                    box.classList.add('opacity-0', 'translate-y-2');
+                    box.classList.remove('opacity-100', 'translate-y-0');
+                }, 2400);
+            }
+
+            switchLobbyTab(tab) {
+                this.lobbyTab = tab;
+                const tabOnline = document.getElementById('tabOnline');
+                const tabLocal = document.getElementById('tabLocal');
+
+                if (tab === 'online') {
+                    tabOnline.className = 'py-2 px-3 rounded-xl font-bold text-xs transition bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm';
+                    tabLocal.className = 'py-2 px-3 rounded-xl font-bold text-xs transition text-[var(--text-secondary)]';
+                    document.getElementById('panelOnlineControls').classList.remove('hidden');
+                    document.getElementById('panelLocalControls').classList.add('hidden');
+                } else {
+                    tabLocal.className = 'py-2 px-3 rounded-xl font-bold text-xs transition bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm';
+                    tabOnline.className = 'py-2 px-3 rounded-xl font-bold text-xs transition text-[var(--text-secondary)]';
+                    document.getElementById('panelLocalControls').classList.remove('hidden');
+                    document.getElementById('panelOnlineControls').classList.add('hidden');
+                }
+            }
+
+            selectGameMode(mode) {
+                this.selectedMode = mode;
+                const hints = {
+                    classic: 'شروع همزمان از پایین، مسابقه تا خط پایان بالا',
+                    quoridor: 'شروع در ضلع‌های مقابل؛ رسیدن به ضلع روبه‌رو',
+                    powerup: 'گره‌های حرکت اضافه، پرش از دیوار و تله‌پورت',
+                    blitz: 'تایمر ۱۲ ثانیه‌ای + بسته شدن تدریجی ردیف‌های پایین'
+                };
+                document.getElementById('modeSubHint').textContent = hints[mode] || '';
+
+                document.querySelectorAll('.mode-card').forEach(btn => {
+                    const isSelected = btn.dataset.mode === mode;
+                    btn.className = isSelected
+                        ? 'mode-card text-right p-3 rounded-2xl border transition flex flex-col gap-1 border-zinc-900 dark:border-white bg-[var(--surface-muted)]'
+                        : 'mode-card text-right p-3 rounded-2xl border border-[var(--border-subtle)] hover:border-zinc-400 transition flex flex-col gap-1';
+                });
+                if (mode === 'quoridor' && this.desiredWallLimit === 99) {
+                    this.setWallLimit(10);
+                }
+            }
+
+            setPlayerCount(count) {
+                this.desiredPlayerCount = count;
+                document.querySelectorAll('#playerCountBtns button').forEach(btn => {
+                    const active = Number(btn.dataset.count) === count;
+                    btn.className = active
+                        ? 'py-1.5 rounded-xl font-bold text-xs bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                        : 'py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]';
+                });
+            }
+
+            setWallLimit(limit) {
+                this.desiredWallLimit = limit;
+                document.querySelectorAll('#wallLimitBtns button').forEach(btn => {
+                    const active = Number(btn.dataset.limit) === limit;
+                    btn.className = active
+                        ? 'py-1.5 rounded-xl font-bold text-xs bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                        : 'py-1.5 rounded-xl font-bold text-xs text-[var(--text-secondary)]';
+                });
+            }
+
+            setBotMode(useBots) {
+                this.useBotsInLocal = useBots;
+                document.getElementById('btnBotModeYes').className = useBots
+                    ? 'px-3 py-1 rounded-xl text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'px-3 py-1 rounded-xl text-xs font-bold text-[var(--text-secondary)]';
+                document.getElementById('btnBotModeNo').className = !useBots
+                    ? 'px-3 py-1 rounded-xl text-xs font-bold bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'px-3 py-1 rounded-xl text-xs font-bold text-[var(--text-secondary)]';
+            }
+
+            getCleanPlayerName() {
+                const raw = document.getElementById('inputPlayerName').value.trim();
+                this.playerName = raw ? raw.toUpperCase() : ('USER' + Math.floor(1000 + Math.random() * 9000));
+                return this.playerName;
+            }
+
+            // =========================================================================
+            // GAME STATE INITIALIZATION
+            // =========================================================================
+            createInitialGameState(playersList, mode, wallLimit) {
+                const count = playersList.length;
+                const configuredPlayers = playersList.map((p, idx) => {
+                    let startR = ROWS - 1;
+                    let startC = 2;
+                    let goalType = 'row0';
+
+                    if (mode !== 'quoridor') {
+                        startR = ROWS - 1;
+                        if (count === 2) startC = idx === 0 ? 2 : 6;
+                        else if (count === 3) startC = idx === 0 ? 1 : (idx === 1 ? 4 : 7);
+                        else startC = idx === 0 ? 1 : (idx === 1 ? 3 : (idx === 2 ? 5 : 7));
+                        goalType = 'row0';
+                    } else {
+                        if (idx === 0) { startR = ROWS - 1; startC = Math.floor(COLS / 2); goalType = 'row0'; }
+                        else if (idx === 1) { startR = 0; startC = Math.floor(COLS / 2); goalType = 'rowMax'; }
+                        else if (idx === 2) { startR = Math.floor(ROWS / 2); startC = 0; goalType = 'colMax'; }
+                        else { startR = Math.floor(ROWS / 2); startC = COLS - 1; goalType = 'col0'; }
+                    }
+
+                    return {
+                        idx,
+                        id: p.id,
+                        name: p.name,
+                        isBot: !!p.isBot,
+                        r: startR,
+                        c: startC,
+                        goalType,
+                        wallsLeft: wallLimit,
+                        breakers: mode === 'powerup' ? 1 : 0,
+                        jumpWallCharges: 0,
+                        eliminated: false
+                    };
+                });
+
+                const powerups = [];
+                const portals = [];
+                if (mode === 'powerup') {
+                    const types = ['double', 'breaker', 'jump', 'double', 'breaker', 'jump'];
+                    const usedKeys = new Set();
+                    types.forEach(t => {
+                        for (let attempt = 0; attempt < 20; attempt++) {
+                            const pr = 2 + Math.floor(Math.random() * (ROWS - 4));
+                            const pc = Math.floor(Math.random() * COLS);
+                            const k = `${pr},${pc}`;
+                            if (!usedKeys.has(k)) {
+                                usedKeys.add(k);
+                                powerups.push({ r: pr, c: pc, type: t });
+                                break;
+                            }
+                        }
+                    });
+                    portals.push({ r: 8, c: 1, targetR: 4, targetC: 7 });
+                    portals.push({ r: 4, c: 7, targetR: 8, targetC: 1 });
+                }
+
+                return {
+                    status: 'playing',
+                    mode,
+                    wallLimit,
+                    maxPlayers: count,
+                    turnIndex: 0,
+                    turnNumber: 1,
+                    extraActions: 0,
+                    lavaRow: ROWS,
+                    players: configuredPlayers,
+                    walls: [], // Each wall: { type: 'h'|'v', r, c, ownerIdx }
+                    powerups,
+                    portals,
+                    winnerIdx: null,
+                    updatedAt: Date.now()
+                };
+            }
+
+            // =========================================================================
+            // MULTIPLAYER NETWORKING (PeerJS WebRTC + Firestore)
+            // =========================================================================
+            async createOnlineRoom() {
+                const name = this.getCleanPlayerName();
+                this.roomCode = this.generateRoomCode();
+                this.isOnlineMatch = true;
+                this.isHost = true;
+                this.mySlotIndex = 0;
+
+                const lobbyData = {
+                    roomCode: this.roomCode,
+                    hostId: this.localPeerId,
+                    mode: this.selectedMode,
+                    maxPlayers: this.desiredPlayerCount,
+                    wallLimit: this.desiredWallLimit,
+                    status: 'waiting',
+                    players: [{ id: this.localPeerId, name, isBot: false }],
+                    gameState: null
+                };
+
+                this.lobbyState = lobbyData;
+                this.showScreen('waiting');
+                this.renderWaitingRoom();
+
+                this.initPeerHost(this.roomCode);
+
+                if (this.db && this.fbUser) {
+                    try {
+                        const roomRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'stenka_rooms', this.roomCode);
+                        await setDoc(roomRef, { payload: JSON.stringify(lobbyData), updatedAt: Date.now() });
+                        if (this.fbUnsub) this.fbUnsub();
+                        this.fbUnsub = onSnapshot(roomRef, (snap) => {
+                            if (!snap.exists()) return;
+                            this.handleIncomingNetworkPayload(JSON.parse(snap.data().payload));
+                        }, (err) => console.warn(err));
+                    } catch (e) {}
+                }
+            }
+
+            initPeerHost(code) {
+                try {
+                    if (this.peer) this.peer.destroy();
+                    this.hostConnections = [];
+                    const peerId = `stenka-pro-room-${code.toLowerCase()}`;
+                    this.peer = new Peer(peerId);
+                    this.peer.on('connection', (conn) => {
+                        this.hostConnections.push(conn);
+                        conn.on('data', (msg) => this.handlePeerMessageOnHost(conn, msg));
+                        conn.on('close', () => {
+                            this.hostConnections = this.hostConnections.filter(c => c !== conn);
+                        });
+                    });
+                } catch (e) {}
+            }
+
+            handlePeerMessageOnHost(conn, msg) {
+                if (!msg || !msg.type) return;
+                if (msg.type === 'JOIN_REQUEST') {
+                    if (this.lobbyState.status !== 'waiting') return;
+                    const exists = this.lobbyState.players.find(p => p.id === msg.player.id);
+                    if (!exists && this.lobbyState.players.length < this.lobbyState.maxPlayers) {
+                        this.lobbyState.players.push(msg.player);
+                    }
+                    this.broadcastLobbyOrGameState();
+                } else if (msg.type === 'SYNC_STATE') {
+                    this.lobbyState = msg.payload;
+                    this.handleIncomingNetworkPayload(this.lobbyState);
+                    this.broadcastToPeersOnly(this.lobbyState);
+                }
+            }
+
+            async joinOnlineRoom() {
+                const rawCode = document.getElementById('inputJoinCode').value.trim().toUpperCase();
+                if (rawCode.length < 3) {
+                    this.showToast('کد اتاق را وارد کنید');
+                    return;
+                }
+                const name = this.getCleanPlayerName();
+                this.roomCode = rawCode;
+                this.isOnlineMatch = true;
+                this.isHost = false;
+
+                this.showToast(`در حال اتصال به اتاق ${rawCode}...`);
+
+                if (this.db && this.fbUser) {
+                    try {
+                        const roomRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'stenka_rooms', rawCode);
+                        const snap = await getDoc(roomRef);
+                        if (snap.exists()) {
+                            const lobbyData = JSON.parse(snap.data().payload);
+                            const existingIdx = lobbyData.players.findIndex(p => p.id === this.localPeerId);
+                            if (existingIdx === -1) {
+                                if (lobbyData.players.length >= lobbyData.maxPlayers) {
+                                    this.showToast('ظرفیت اتاق تکمیل است');
+                                    return;
+                                }
+                                lobbyData.players.push({ id: this.localPeerId, name, isBot: false });
+                                this.mySlotIndex = lobbyData.players.length - 1;
+                                await setDoc(roomRef, { payload: JSON.stringify(lobbyData), updatedAt: Date.now() });
+                            } else {
+                                this.mySlotIndex = existingIdx;
+                            }
+                            this.lobbyState = lobbyData;
+                            this.showScreen('waiting');
+                            this.renderWaitingRoom();
+
+                            if (this.fbUnsub) this.fbUnsub();
+                            this.fbUnsub = onSnapshot(roomRef, (s) => {
+                                if (!s.exists()) return;
+                                this.handleIncomingNetworkPayload(JSON.parse(s.data().payload));
+                            }, (err) => console.warn(err));
+                        }
+                    } catch (e) {}
+                }
+
+                try {
+                    if (this.peer) this.peer.destroy();
+                    this.peer = new Peer();
+                    this.peer.on('open', () => {
+                        const hostPeerId = `stenka-pro-room-${rawCode.toLowerCase()}`;
+                        const conn = this.peer.connect(hostPeerId, { reliable: true });
+                        this.clientConn = conn;
+                        conn.on('open', () => {
+                            conn.send({
+                                type: 'JOIN_REQUEST',
+                                player: { id: this.localPeerId, name, isBot: false }
+                            });
+                        });
+                        conn.on('data', (msg) => {
+                            if (msg && msg.type === 'STATE_UPDATE') {
+                                this.handleIncomingNetworkPayload(msg.payload);
+                            }
+                        });
+                    });
+                } catch (e) {}
+            }
+
+            handleIncomingNetworkPayload(data) {
+                if (!data) return;
+                this.lobbyState = data;
+                const myIdx = data.players.findIndex(p => p.id === this.localPeerId);
+                if (myIdx !== -1) this.mySlotIndex = myIdx;
+
+                if (data.status === 'waiting') {
+                    this.showScreen('waiting');
+                    this.renderWaitingRoom();
+                } else if (data.status === 'playing' && data.gameState) {
+                    this.state = data.gameState;
+                    if (document.getElementById('screenGame').classList.contains('hidden')) {
+                        this.showScreen('game');
+                    }
+                    this.renderBoard();
+                    if (this.state.status === 'finished' && this.state.winnerIdx !== null) {
+                        this.showVictoryModal(this.state.players[this.state.winnerIdx]);
+                    } else {
+                        document.getElementById('modalVictory').classList.add('hidden');
+                        this.checkBotTurnIfNeeded();
+                    }
+                }
+            }
+
+            broadcastToPeersOnly(payload) {
+                this.hostConnections.forEach(conn => {
+                    if (conn && conn.open) conn.send({ type: 'STATE_UPDATE', payload });
+                });
+            }
+
+            async broadcastLobbyOrGameState() {
+                if (!this.isOnlineMatch || !this.lobbyState) return;
+                if (this.state) this.lobbyState.gameState = this.state;
+
+                if (this.isHost) {
+                    this.broadcastToPeersOnly(this.lobbyState);
+                } else if (this.clientConn && this.clientConn.open) {
+                    this.clientConn.send({ type: 'SYNC_STATE', payload: this.lobbyState });
+                }
+
+                if (this.db && this.fbUser && this.roomCode) {
+                    try {
+                        const roomRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'stenka_rooms', this.roomCode);
+                        await setDoc(roomRef, { payload: JSON.stringify(this.lobbyState), updatedAt: Date.now() });
+                    } catch (e) {}
+                }
+            }
+
+            renderWaitingRoom() {
+                if (!this.lobbyState) return;
+                document.getElementById('waitingRoomCodeDisplay').textContent = this.lobbyState.roomCode;
+                document.getElementById('waitingPlayerCountLabel').textContent = `${this.lobbyState.players.length} / ${this.lobbyState.maxPlayers}`;
+
+                const listEl = document.getElementById('waitingPlayersList');
+                listEl.innerHTML = '';
+
+                for (let i = 0; i < this.lobbyState.maxPlayers; i++) {
+                    const p = this.lobbyState.players[i];
+                    const style = PLAYER_STYLES[i];
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]';
+                    if (p) {
+                        row.innerHTML = `
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-3 h-3 rounded-full ${style.pawnClass} inline-block"></span>
+                                <span class="font-mono-en font-bold text-xs">${p.name}</span>
+                                ${p.id === this.localPeerId ? '<span class="text-[10px] px-2 py-0.5 rounded-md bg-[var(--surface-card)] border border-[var(--border-subtle)] font-bold">شما</span>' : ''}
+                                ${p.isBot ? '<span class="text-[10px] px-2 py-0.5 rounded-md bg-[var(--surface-card)] text-[var(--text-secondary)] font-bold">AI</span>' : ''}
+                            </div>
+                            <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">متصل</span>
+                        `;
+                    } else {
+                        row.innerHTML = `
+                            <div class="flex items-center gap-2.5 opacity-45">
+                                <span class="w-3 h-3 rounded-full border border-dashed border-zinc-400 inline-block"></span>
+                                <span class="text-xs">در انتظار بازیکن ${i + 1}...</span>
+                            </div>
+                            <span class="text-[11px] text-[var(--text-muted)]">خالی</span>
+                        `;
+                    }
+                    listEl.appendChild(row);
+                }
+
+                const canHostStart = this.isHost && this.lobbyState.players.length >= 2;
+                document.getElementById('btnHostStartOnline').classList.toggle('hidden', !this.isHost);
+                document.getElementById('btnHostStartOnline').disabled = !canHostStart;
+                document.getElementById('btnHostAddBot').classList.toggle('hidden', !this.isHost || this.lobbyState.players.length >= this.lobbyState.maxPlayers);
+                document.getElementById('guestWaitingHint').classList.toggle('hidden', this.isHost);
+            }
+
+            hostFillWithBot() {
+                if (!this.isHost || !this.lobbyState) return;
+                if (this.lobbyState.players.length >= this.lobbyState.maxPlayers) return;
+                const botNum = this.lobbyState.players.length + 1;
+                this.lobbyState.players.push({
+                    id: 'bot_' + Math.random().toString(36).substring(2, 7),
+                    name: `STENKA7${botNum}`,
+                    isBot: true
+                });
+                this.renderWaitingRoom();
+                this.broadcastLobbyOrGameState();
+            }
+
+            hostStartMatch() {
+                if (!this.isHost || !this.lobbyState || this.lobbyState.players.length < 2) return;
+                this.lobbyState.status = 'playing';
+                this.state = this.createInitialGameState(
+                    this.lobbyState.players,
+                    this.lobbyState.mode,
+                    this.lobbyState.wallLimit
+                );
+                this.lobbyState.gameState = this.state;
+                this.showScreen('game');
+                this.renderBoard();
+                this.startBlitzTimerIfNeeded();
+                this.broadcastLobbyOrGameState();
+                this.checkBotTurnIfNeeded();
+            }
+
+            startLocalGame() {
+                const name = this.getCleanPlayerName();
+                this.isOnlineMatch = false;
+                this.isHost = true;
+                this.roomCode = null;
+                this.mySlotIndex = 0;
+
+                const players = [{ id: this.localPeerId, name, isBot: false }];
+                const botNames = ['STENKA72', 'STENKA84', 'STENKA96'];
+                for (let i = 1; i < this.desiredPlayerCount; i++) {
+                    players.push({
+                        id: 'local_' + i,
+                        name: this.useBotsInLocal ? botNames[i - 1] : `PLAYER${i + 1}`,
+                        isBot: this.useBotsInLocal
+                    });
+                }
+
+                this.state = this.createInitialGameState(players, this.selectedMode, this.desiredWallLimit);
+                this.showScreen('game');
+                this.renderBoard();
+                this.startBlitzTimerIfNeeded();
+                this.checkBotTurnIfNeeded();
+            }
+
+            showScreen(screenName) {
+                document.getElementById('screenLobby').classList.toggle('hidden', screenName !== 'lobby');
+                document.getElementById('screenWaitingRoom').classList.toggle('hidden', screenName !== 'waiting');
+                document.getElementById('screenGame').classList.toggle('hidden', screenName !== 'game');
+                document.getElementById('btnBackToLobby').classList.toggle('hidden', screenName === 'lobby');
+                document.getElementById('btnBackToLobby').classList.toggle('flex', screenName !== 'lobby');
+
+                const netBadge = document.getElementById('networkBadge');
+                if (this.isOnlineMatch && this.roomCode && screenName !== 'lobby') {
+                    netBadge.classList.remove('hidden');
+                    netBadge.classList.add('flex');
+                    document.getElementById('networkRoomText').textContent = this.roomCode;
+                } else {
+                    netBadge.classList.add('hidden');
+                    netBadge.classList.remove('flex');
+                }
+            }
+
+            confirmLeaveGame() {
+                document.getElementById('modalConfirmLeave').classList.remove('hidden');
+            }
+
+            returnToLobby() {
+                clearInterval(this.blitzInterval);
+                clearTimeout(this.botTimeout);
+                document.getElementById('modalConfirmLeave').classList.add('hidden');
+                document.getElementById('modalVictory').classList.add('hidden');
+                if (this.fbUnsub) { this.fbUnsub(); this.fbUnsub = null; }
+                if (this.peer) { this.peer.destroy(); this.peer = null; }
+                this.state = null;
+                this.pendingWall = null;
+                this.hoverWall = null;
+                this.isOnlineMatch = false;
+                this.showScreen('lobby');
+            }
+
+            rematchGame() {
+                document.getElementById('modalVictory').classList.add('hidden');
+                this.pendingWall = null;
+                this.hoverWall = null;
+                if (this.isOnlineMatch && this.lobbyState) {
+                    this.state = this.createInitialGameState(
+                        this.lobbyState.players,
+                        this.lobbyState.mode,
+                        this.lobbyState.wallLimit
+                    );
+                    this.lobbyState.gameState = this.state;
+                    this.renderBoard();
+                    this.startBlitzTimerIfNeeded();
+                    this.broadcastLobbyOrGameState();
+                    this.checkBotTurnIfNeeded();
+                } else if (this.state) {
+                    const prevPlayers = this.state.players.map(p => ({ id: p.id, name: p.name, isBot: p.isBot }));
+                    this.state = this.createInitialGameState(prevPlayers, this.state.mode, this.state.wallLimit);
+                    this.renderBoard();
+                    this.startBlitzTimerIfNeeded();
+                    this.checkBotTurnIfNeeded();
+                }
+            }
+
+            generateRoomCode() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let res = '';
+                for (let i = 0; i < 4; i++) res += chars[Math.floor(Math.random() * chars.length)];
+                return res;
+            }
+
+            copyRoomCode() {
+                if (!this.roomCode) return;
+                this.copyTextFallback(this.roomCode);
+                this.showToast(`کد اتاق ${this.roomCode} کپی شد`);
+            }
+
+            copyInviteLink() {
+                if (!this.roomCode) return;
+                const url = `${window.location.origin}${window.location.pathname}?room=${this.roomCode}`;
+                this.copyTextFallback(url);
+                this.showToast('لینک دعوت کپی شد');
+            }
+
+            copyTextFallback(text) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+
+            // =========================================================================
+            // CORE STENKA RULES: UNIT-EDGE WALL COLLISION & BFS PATHFINDING
+            // =========================================================================
+            isMyTurn() {
+                if (!this.state || this.state.status !== 'playing') return false;
+                const currentP = this.state.players[this.state.turnIndex];
+                if (!currentP || currentP.isBot) return false;
+                if (this.isOnlineMatch) return this.state.turnIndex === this.mySlotIndex;
+                return true;
+            }
+
+            // Check if single unit boundary between adjacent cells (r1,c1) and (r2,c2) is blocked
+            isEdgeBlocked(r1, c1, r2, c2, wallsArray = this.state.walls) {
+                if (r1 === r2) {
+                    const minC = Math.min(c1, c2);
+                    for (const w of wallsArray) {
+                        if (w.type === 'v' && w.c === minC && (w.r === r1 || w.r + 1 === r1)) {
+                            return true;
+                        }
+                    }
+                } else if (c1 === c2) {
+                    const minR = Math.min(r1, r2);
+                    for (const w of wallsArray) {
+                        if (w.type === 'h' && w.r === minR && (w.c === c1 || w.c + 1 === c1)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            getValidMovesForPlayer(playerIdx) {
+                const p = this.state.players[playerIdx];
+                if (!p || p.eliminated) return [];
+                const moves = [];
+                const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                const occupied = new Set(
+                    this.state.players
+                        .filter((other, idx) => idx !== playerIdx && !other.eliminated)
+                        .map(other => `${other.r},${other.c}`)
+                );
+
+                for (const [dr, dc] of dirs) {
+                    const nr = p.r + dr;
+                    const nc = p.c + dc;
+                    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+                    if (nr >= this.state.lavaRow) continue;
+
+                    const blocked = this.isEdgeBlocked(p.r, p.c, nr, nc);
+                    if (!blocked) {
+                        if (occupied.has(`${nr},${nc}`)) {
+                            // Straight jump over opponent
+                            const jr = nr + dr;
+                            const jc = nc + dc;
+                            if (jr >= 0 && jr < ROWS && jc >= 0 && jc < COLS && jr < this.state.lavaRow) {
+                                if (!this.isEdgeBlocked(nr, nc, jr, jc) && !occupied.has(`${jr},${jc}`)) {
+                                    moves.push({ r: jr, c: jc, usedJumpCharge: false });
+                                }
+                            }
+                        } else {
+                            moves.push({ r: nr, c: nc, usedJumpCharge: false });
+                        }
+                    } else if (p.jumpWallCharges > 0 && !occupied.has(`${nr},${nc}`)) {
+                        moves.push({ r: nr, c: nc, usedJumpCharge: true });
+                    }
+                }
+                return moves;
+            }
+
+            // Stenka Wall Validation:
+            // Allows perpendicular walls to touch or cross at vertices (just like in screenshot 143513.jpg),
+            // only preventing overlapping the same unit-edge or trapping any player 100%.
+            canPlaceWall(type, r, c) {
+                if (r < 0 || r >= ROWS - 1 || c < 0 || c >= COLS - 1) {
+                    return { ok: false, reason: 'خارج از محدوده' };
+                }
+
+                for (const w of this.state.walls) {
+                    if (w.type === type) {
+                        if (type === 'h' && w.r === r && Math.abs(w.c - c) <= 1) {
+                            return { ok: false, reason: 'این خط دارای دیوار است' };
+                        }
+                        if (type === 'v' && w.c === c && Math.abs(w.r - r) <= 1) {
+                            return { ok: false, reason: 'این خط دارای دیوار است' };
+                        }
+                    }
+                }
+
+                // Ensure every player still has at least 1 valid path to their goal
+                const testWalls = [...this.state.walls, { type, r, c }];
+                for (const pl of this.state.players) {
+                    if (pl.eliminated) continue;
+                    if (!this.hasPathToGoal(pl, testWalls)) {
+                        return { ok: false, reason: `مسیر ${pl.name} به خط پایان نباید کاملاً بسته شود` };
+                    }
+                }
+
+                return { ok: true };
+            }
+
+            hasPathToGoal(player, wallsArray) {
+                const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+                const queue = [[player.r, player.c]];
+                visited[player.r][player.c] = true;
+                const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+                while (queue.length > 0) {
+                    const [cr, cc] = queue.shift();
+                    if (this.isGoalReached(player.goalType, cr, cc)) return true;
+
+                    for (const [dr, dc] of dirs) {
+                        const nr = cr + dr;
+                        const nc = cc + dc;
+                        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !visited[nr][nc]) {
+                            if (!this.isEdgeBlocked(cr, cc, nr, nc, wallsArray)) {
+                                visited[nr][nc] = true;
+                                queue.push([nr, nc]);
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            isGoalReached(goalType, r, c) {
+                if (goalType === 'row0') return r === 0;
+                if (goalType === 'rowMax') return r === ROWS - 1;
+                if (goalType === 'col0') return c === 0;
+                if (goalType === 'colMax') return c === COLS - 1;
+                return r === 0;
+            }
+
+            getShortestDistance(r, c, goalType, wallsArray = this.state.walls) {
+                const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+                const queue = [[r, c, 0]];
+                visited[r][c] = true;
+                const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+                while (queue.length > 0) {
+                    const [cr, cc, dist] = queue.shift();
+                    if (this.isGoalReached(goalType, cr, cc)) return dist;
+                    for (const [dr, dc] of dirs) {
+                        const nr = cr + dr;
+                        const nc = cc + dc;
+                        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !visited[nr][nc]) {
+                            if (!this.isEdgeBlocked(cr, cc, nr, nc, wallsArray)) {
+                                visited[nr][nc] = true;
+                                queue.push([nr, nc, dist + 1]);
+                            }
+                        }
+                    }
+                }
+                return 999;
+            }
+
+            // =========================================================================
+            // EXECUTE ACTIONS
+            // =========================================================================
+            executeMove(targetR, targetC, usedJumpCharge = false) {
+                const p = this.state.players[this.state.turnIndex];
+                p.r = targetR;
+                p.c = targetC;
+                if (usedJumpCharge && p.jumpWallCharges > 0) {
+                    p.jumpWallCharges--;
+                    this.showToast('عبور از روی دیوار انجام شد');
+                }
+                sfx.move();
+                this.pendingWall = null;
+                this.hoverWall = null;
+
+                // Portals
+                if (this.state.portals && this.state.portals.length > 0) {
+                    const portal = this.state.portals.find(pt => pt.r === p.r && pt.c === p.c);
+                    if (portal) {
+                        p.r = portal.targetR;
+                        p.c = portal.targetC;
+                        sfx.powerup();
+                        this.showToast('انتقال از دروازه تله‌پورت');
+                    }
+                }
+
+                // Tactical Nodes
+                if (this.state.powerups && this.state.powerups.length > 0) {
+                    const pIdx = this.state.powerups.findIndex(pu => pu.r === p.r && pu.c === p.c);
+                    if (pIdx !== -1) {
+                        const item = this.state.powerups.splice(pIdx, 1)[0];
+                        sfx.powerup();
+                        if (item.type === 'double') {
+                            this.state.extraActions += 1;
+                            this.showToast('نوبت اضافه فعال شد (+۱)');
+                        } else if (item.type === 'breaker') {
+                            p.breakers += 1;
+                            this.showToast('ابزار حذف دیوار دریافت شد');
+                        } else if (item.type === 'jump') {
+                            p.jumpWallCharges += 1;
+                            this.showToast('قابلیت پرش از دیوار فعال شد');
+                        }
+                    }
+                }
+
+                if (this.isGoalReached(p.goalType, p.r, p.c)) {
+                    this.state.status = 'finished';
+                    this.state.winnerIdx = this.state.turnIndex;
+                    sfx.win();
+                    this.renderBoard();
+                    this.showVictoryModal(p);
+                    this.broadcastLobbyOrGameState();
+                    return;
+                }
+
+                this.advanceTurn();
+            }
+
+            executePlaceWall(type, r, c) {
+                const p = this.state.players[this.state.turnIndex];
+                if (p.wallsLeft <= 0) {
+                    sfx.error();
+                    this.showToast('دیوارهای شما به پایان رسیده است');
+                    return false;
+                }
+
+                const check = this.canPlaceWall(type, r, c);
+                if (!check.ok) {
+                    sfx.error();
+                    this.triggerBoardShake();
+                    this.showToast(check.reason);
+                    return false;
+                }
+
+                this.state.walls.push({
+                    type,
+                    r,
+                    c,
+                    ownerIdx: this.state.turnIndex
+                });
+                if (p.wallsLeft < 90) p.wallsLeft--;
+
+                sfx.wall();
+                this.pendingWall = null;
+                this.hoverWall = null;
+                this.advanceTurn();
+                return true;
+            }
+
+            executeBreakWall(wallIndex) {
+                const p = this.state.players[this.state.turnIndex];
+                if (p.breakers <= 0 || wallIndex < 0 || wallIndex >= this.state.walls.length) return;
+                this.state.walls.splice(wallIndex, 1);
+                p.breakers--;
+                this.breakerModeActive = false;
+                sfx.powerup();
+                this.showToast('دیوار انتخابی حذف شد');
+                this.advanceTurn();
+            }
+
+            advanceTurn() {
+                if (this.state.status !== 'playing') return;
+
+                if (this.state.extraActions > 0) {
+                    this.state.extraActions--;
+                    this.renderBoard();
+                    this.broadcastLobbyOrGameState();
+                    this.checkBotTurnIfNeeded();
+                    return;
+                }
+
+                const count = this.state.players.length;
+                const nextIdx = (this.state.turnIndex + 1) % count;
+
+                if (nextIdx === 0) {
+                    this.state.turnNumber++;
+                    if (this.state.mode === 'blitz' && this.state.turnNumber % 3 === 0 && this.state.lavaRow > 3) {
+                        this.state.lavaRow--;
+                        this.showToast('ردیف پایین مسدود شد');
+                        this.state.players.forEach(pl => {
+                            if (pl.r >= this.state.lavaRow && pl.r > 0) {
+                                pl.r = this.state.lavaRow - 1;
+                            }
+                        });
+                    }
+                }
+
+                this.state.turnIndex = nextIdx;
+                this.breakerModeActive = false;
+                this.startBlitzTimerIfNeeded();
+                this.renderBoard();
+                this.broadcastLobbyOrGameState();
+                this.checkBotTurnIfNeeded();
+            }
+
+            startBlitzTimerIfNeeded() {
+                clearInterval(this.blitzInterval);
+                const badge = document.getElementById('blitzTimerBadge');
+                if (!this.state || this.state.mode !== 'blitz' || this.state.status !== 'playing') {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                    return;
+                }
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                let sec = 12;
+                document.getElementById('blitzSeconds').textContent = `${sec}s`;
+
+                this.blitzInterval = setInterval(() => {
+                    if (!this.state || this.state.status !== 'playing') {
+                        clearInterval(this.blitzInterval);
+                        return;
+                    }
+                    sec--;
+                    document.getElementById('blitzSeconds').textContent = `${Math.max(0, sec)}s`;
+                    if (sec <= 0) {
+                        clearInterval(this.blitzInterval);
+                        if (!this.isOnlineMatch || this.isHost) {
+                            this.showToast('پایان مهلت نوبت');
+                            this.advanceTurn();
+                        }
+                    }
+                }, 1000);
+            }
+
+            // =========================================================================
+            // AI BOT ENGINE
+            // =========================================================================
+            checkBotTurnIfNeeded() {
+                clearTimeout(this.botTimeout);
+                if (!this.state || this.state.status !== 'playing') return;
+                if (this.isOnlineMatch && !this.isHost) return;
+
+                const currentP = this.state.players[this.state.turnIndex];
+                if (!currentP || !currentP.isBot) return;
+
+                this.botTimeout = setTimeout(() => {
+                    this.runSmartBotTurn(this.state.turnIndex);
+                }, 550);
+            }
+
+            runSmartBotTurn(botIdx) {
+                if (!this.state || this.state.status !== 'playing' || this.state.turnIndex !== botIdx) return;
+                const bot = this.state.players[botIdx];
+
+                let leadingOpponent = null;
+                let minOppDist = 999;
+                this.state.players.forEach((pl, idx) => {
+                    if (idx !== botIdx && !pl.eliminated) {
+                        const d = this.getShortestDistance(pl.r, pl.c, pl.goalType);
+                        if (d < minOppDist) {
+                            minOppDist = d;
+                            leadingOpponent = pl;
+                        }
+                    }
+                });
+
+                const myDist = this.getShortestDistance(bot.r, bot.c, bot.goalType);
+
+                if (bot.wallsLeft > 0 && leadingOpponent && (minOppDist <= myDist || Math.random() < 0.45)) {
+                    let bestWall = null;
+                    let bestScoreGain = 0;
+
+                    const candidateCoords = [];
+                    for (let dr = -2; dr <= 1; dr++) {
+                        for (let dc = -2; dc <= 1; dc++) {
+                            candidateCoords.push({ type: 'h', r: leadingOpponent.r + dr, c: leadingOpponent.c + dc });
+                            candidateCoords.push({ type: 'v', r: leadingOpponent.r + dr, c: leadingOpponent.c + dc });
+                        }
+                    }
+
+                    for (const cand of candidateCoords) {
+                        const valid = this.canPlaceWall(cand.type, cand.r, cand.c);
+                        if (valid.ok) {
+                            const testWalls = [...this.state.walls, cand];
+                            const newOppDist = this.getShortestDistance(leadingOpponent.r, leadingOpponent.c, leadingOpponent.goalType, testWalls);
+                            const newMyDist = this.getShortestDistance(bot.r, bot.c, bot.goalType, testWalls);
+                            const gain = (newOppDist - minOppDist) - (newMyDist - myDist);
+                            if (gain > bestScoreGain) {
+                                bestScoreGain = gain;
+                                bestWall = cand;
+                            }
+                        }
+                    }
+
+                    if (bestWall && bestScoreGain >= 1) {
+                        this.executePlaceWall(bestWall.type, bestWall.r, bestWall.c);
+                        return;
+                    }
+                }
+
+                const validMoves = this.getValidMovesForPlayer(botIdx);
+                if (validMoves.length > 0) {
+                    let chosenMove = validMoves[0];
+                    let bestDist = 999;
+                    for (const mv of validMoves) {
+                        let d = this.getShortestDistance(mv.r, mv.c, bot.goalType);
+                        if (this.state.powerups?.some(pu => pu.r === mv.r && pu.c === mv.c)) d -= 1.5;
+                        if (d < bestDist) {
+                            bestDist = d;
+                            chosenMove = mv;
+                        }
+                    }
+                    this.executeMove(chosenMove.r, chosenMove.c, chosenMove.usedJumpCharge);
+                } else {
+                    this.advanceTurn();
+                }
+            }
+
+            toggleWallBreakerMode() {
+                this.breakerModeActive = !this.breakerModeActive;
+                this.pendingWall = null;
+                this.hoverWall = null;
+                this.showToast(this.breakerModeActive ? 'روی دیوار مورد نظر برای حذف کلیک کنید' : 'لغو حالت حذف دیوار');
+                this.renderBoard();
+            }
+
+            triggerBoardShake() {
+                const frame = document.getElementById('boardOuterFrame');
+                frame.classList.remove('shake-board');
+                void frame.offsetWidth;
+                frame.classList.add('shake-board');
+            }
+
+            showVictoryModal(winnerPlayer) {
+                const style = PLAYER_STYLES[winnerPlayer.idx];
+                document.getElementById('victoryTitle').textContent = `${winnerPlayer.name} برنده شد`;
+                document.getElementById('victorySub').textContent = `مهره ${style.colorName} زودتر از رقبا به خط پایان رسید.`;
+                document.getElementById('modalVictory').classList.remove('hidden');
+            }
+
+            // =========================================================================
+            // RENDERING ENGINE (CLEAN ARCHITECTURAL GRID + FAST GHOST LAYER)
+            // =========================================================================
+            renderBoard() {
+                if (!this.state) return;
+                const stage = document.getElementById('boardStage');
+                stage.innerHTML = '';
+
+                const currentP = this.state.players[this.state.turnIndex];
+                const currentStyle = PLAYER_STYLES[this.state.turnIndex];
+                const myTurn = this.isMyTurn();
+
+                // Top Status Bar
+                document.getElementById('turnPawnDot').className = `w-3 h-3 rounded-full ${currentStyle.pawnClass} inline-block`;
+                document.getElementById('turnStatusText').textContent = myTurn
+                    ? `نوبت شما (${currentP.name})`
+                    : `نوبت ${currentP.name}`;
+                document.getElementById('extraActionBadge').classList.toggle('hidden', this.state.extraActions <= 0);
+
+                document.getElementById('topGoalText').textContent = this.state.mode === 'quoridor' ? 'OPPOSITE GOAL' : 'FINISH';
+                document.getElementById('finishZoneOverlay').classList.toggle('hidden', this.state.mode === 'quoridor');
+
+                const btnBreaker = document.getElementById('btnBreakerTool');
+                if (myTurn && currentP.breakers > 0 && this.state.walls.length > 0) {
+                    btnBreaker.classList.remove('hidden');
+                    btnBreaker.classList.add('flex');
+                    document.getElementById('breakerCount').textContent = currentP.breakers;
+                } else {
+                    btnBreaker.classList.add('hidden');
+                    btnBreaker.classList.remove('flex');
+                }
+
+                this.updateConfirmPillUI();
+
+                const validMoves = (myTurn && !this.breakerModeActive && this.toolMode !== 'wall')
+                    ? this.getValidMovesForPlayer(this.state.turnIndex)
+                    : [];
+
+                // 1. GRID CELLS (9 x 12)
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const cell = document.createElement('div');
+                        const isLockdown = r >= this.state.lavaRow;
+                        cell.style.position = 'absolute';
+                        cell.style.left = `${(c / COLS) * 100}%`;
+                        cell.style.top = `${(r / ROWS) * 100}%`;
+                        cell.style.width = `${100 / COLS}%`;
+                        cell.style.height = `${100 / ROWS}%`;
+                        cell.style.borderRight = c < COLS - 1 ? '1px solid var(--grid-line)' : 'none';
+                        cell.style.borderBottom = r < ROWS - 1 ? '1px solid var(--grid-line)' : 'none';
+                        if (isLockdown) cell.classList.add('lockdown-cell');
+
+                        // Clean Minimal Move Target Indicator
+                        const moveInfo = validMoves.find(m => m.r === r && m.c === c);
+                        if (moveInfo) {
+                            cell.classList.add('cursor-pointer', 'group');
+                            const dotWrap = document.createElement('div');
+                            dotWrap.className = 'w-full h-full flex items-center justify-center transition-colors group-hover:bg-emerald-500/10';
+                            dotWrap.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500/70 ring-4 ring-emerald-500/15 group-hover:scale-125 transition-transform"></span>`;
+                            cell.appendChild(dotWrap);
+                        }
+
+                        stage.appendChild(cell);
+                    }
+                }
+
+                // 2. GRID INTERSECTION MICRO-DOTS (Vertices for Visual Wall Alignment)
+                for (let r = 1; r < ROWS; r++) {
+                    for (let c = 1; c < COLS; c++) {
+                        const vtx = document.createElement('div');
+                        vtx.className = 'vertex-dot';
+                        vtx.style.left = `${(c / COLS) * 100}%`;
+                        vtx.style.top = `${(r / ROWS) * 100}%`;
+                        stage.appendChild(vtx);
+                    }
+                }
+
+                // 3. MINIMAL GEOMETRIC TACTICAL NODES & PORTALS (If in Tactical Mode)
+                if (this.state.portals) {
+                    this.state.portals.forEach(pt => {
+                        const pEl = document.createElement('div');
+                        pEl.style.position = 'absolute';
+                        pEl.style.left = `${(pt.c / COLS) * 100}%`;
+                        pEl.style.top = `${(pt.r / ROWS) * 100}%`;
+                        pEl.style.width = `${100 / COLS}%`;
+                        pEl.style.height = `${100 / ROWS}%`;
+                        pEl.className = 'flex items-center justify-center pointer-events-none z-10 text-indigo-500';
+                        pEl.innerHTML = `<i class="ph-bold ph-spiral text-base animate-spin" style="animation-duration:5s"></i>`;
+                        stage.appendChild(pEl);
+                    });
+                }
+
+                if (this.state.powerups) {
+                    this.state.powerups.forEach(pu => {
+                        const puEl = document.createElement('div');
+                        puEl.style.position = 'absolute';
+                        puEl.style.left = `${(pu.c / COLS) * 100}%`;
+                        puEl.style.top = `${(pu.r / ROWS) * 100}%`;
+                        puEl.style.width = `${100 / COLS}%`;
+                        puEl.style.height = `${100 / ROWS}%`;
+                        puEl.className = 'flex items-center justify-center pointer-events-none z-10';
+                        const iconClass = pu.type === 'double'
+                            ? 'ph-bold ph-lightning text-amber-500'
+                            : (pu.type === 'breaker' ? 'ph-bold ph-hammer text-rose-500' : 'ph-bold ph-arrow-fat-lines-up text-emerald-500');
+                        puEl.innerHTML = `<span class="w-5 h-5 rounded-lg bg-[var(--surface-card)] border border-[var(--border-subtle)] shadow-xs flex items-center justify-center"><i class="${iconClass} text-xs"></i></span>`;
+                        stage.appendChild(puEl);
+                    });
+                }
+
+                // 4. PLACED WALLS
+                this.state.walls.forEach((w, wIdx) => {
+                    const el = this.createWallElement(w.type, w.r, w.c, PLAYER_STYLES[w.ownerIdx].wallClass);
+                    if (this.breakerModeActive && myTurn) {
+                        el.classList.add('cursor-pointer', 'ring-2', 'ring-amber-400', 'animate-pulse');
+                        el.style.pointerEvents = 'auto';
+                        el.onclick = (e) => {
+                            e.stopPropagation();
+                            this.executeBreakWall(wIdx);
+                        };
+                    }
+                    stage.appendChild(el);
+                });
+
+                // 5. DEDICATED GHOST WALL CONTAINER (Updated at 60fps on pointermove)
+                const ghostContainer = document.createElement('div');
+                ghostContainer.id = 'ghostWallLayer';
+                ghostContainer.className = 'absolute inset-0 pointer-events-none z-35';
+                stage.appendChild(ghostContainer);
+                this.updateGhostWallDOM();
+
+                // 6. PLAYER PAWNS
+                this.state.players.forEach((p, idx) => {
+                    if (p.eliminated) return;
+                    const pStyle = PLAYER_STYLES[idx];
+                    const wrap = document.createElement('div');
+                    wrap.style.position = 'absolute';
+                    wrap.style.left = `${(p.c / COLS) * 100}%`;
+                    wrap.style.top = `${(p.r / ROWS) * 100}%`;
+                    wrap.style.width = `${100 / COLS}%`;
+                    wrap.style.height = `${100 / ROWS}%`;
+                    wrap.className = 'flex items-center justify-center pointer-events-none z-30 transition-all duration-200';
+
+                    const sphere = document.createElement('div');
+                    sphere.className = `w-[68%] aspect-square pawn-token ${pStyle.pawnClass} flex items-center justify-center`;
+
+                    if (idx === this.state.turnIndex && this.state.status === 'playing') {
+                        const halo = document.createElement('div');
+                        halo.className = 'pawn-halo';
+                        halo.style.color = pStyle.hex;
+                        sphere.appendChild(halo);
+                    }
+
+                    if (p.jumpWallCharges > 0) {
+                        const badge = document.createElement('span');
+                        badge.className = 'w-2 h-2 rounded-full bg-white shadow-xs';
+                        sphere.appendChild(badge);
+                    }
+
+                    wrap.appendChild(sphere);
+                    stage.appendChild(wrap);
+                });
+
+                // 7. MINIMAL FOOTER PLAYER STRIP (▲ USER4376 · STENKA72)
+                const strip = document.getElementById('playersHudStrip');
+                strip.innerHTML = '';
+                this.state.players.forEach((p, idx) => {
+                    if (idx > 0) {
+                        const sep = document.createElement('span');
+                        sep.className = 'text-[var(--text-muted)] px-0.5';
+                        sep.textContent = '·';
+                        strip.appendChild(sep);
+                    }
+                    const isTurn = idx === this.state.turnIndex;
+                    const item = document.createElement('div');
+                    item.className = `flex items-center gap-1.5 transition ${
+                        isTurn ? 'text-[var(--text-primary)] font-extrabold' : 'text-[var(--text-secondary)] opacity-65'
+                    }`;
+                    const wallTag = p.wallsLeft < 90 ? `<span class="text-[10px] text-[var(--text-muted)]">[${p.wallsLeft}]</span>` : '';
+                    item.innerHTML = `
+                        ${isTurn ? '<span class="text-[9px]">▲</span>' : ''}
+                        <span class="w-2 h-2 rounded-full ${PLAYER_STYLES[idx].pawnClass} inline-block"></span>
+                        <span>${p.name}</span>
+                        ${wallTag}
+                    `;
+                    strip.appendChild(item);
+                });
+            }
+
+            // Fast DOM update for Ghost Wall Preview without re-rendering the entire board
+            updateGhostWallDOM() {
+                const layer = document.getElementById('ghostWallLayer');
+                if (!layer || !this.state) return;
+                layer.innerHTML = '';
+
+                const activeTarget = this.pendingWall
+                    ? { ...this.pendingWall, valid: this.canPlaceWall(this.pendingWall.type, this.pendingWall.r, this.pendingWall.c).ok }
+                    : this.hoverWall;
+
+                if (!activeTarget || !this.isMyTurn()) return;
+
+                const currentStyle = PLAYER_STYLES[this.state.turnIndex];
+                const el = document.createElement('div');
+
+                if (activeTarget.valid) {
+                    el.className = `wall-ghost-valid ${currentStyle.wallClass} opacity-75`;
+                } else {
+                    el.className = 'wall-ghost-invalid';
+                }
+
+                this.positionWallGeometry(el, activeTarget.type, activeTarget.r, activeTarget.c);
+                layer.appendChild(el);
+            }
+
+            createWallElement(type, r, c, colorClass) {
+                const el = document.createElement('div');
+                el.className = `wall-bar ${colorClass} pointer-events-none z-25`;
+                this.positionWallGeometry(el, type, r, c);
+                return el;
+            }
+
+            positionWallGeometry(el, type, r, c) {
+                const thickness = 7; // Crisp architectural wall thickness in px
+                if (type === 'h') {
+                    el.style.left = `calc(${(c / COLS) * 100}% + 2px)`;
+                    el.style.width = `calc(${(2 / COLS) * 100}% - 4px)`;
+                    el.style.top = `calc(${((r + 1) / ROWS) * 100}% - ${thickness / 2}px)`;
+                    el.style.height = `${thickness}px`;
+                } else {
+                    el.style.left = `calc(${((c + 1) / COLS) * 100}% - ${thickness / 2}px)`;
+                    el.style.width = `${thickness}px`;
+                    el.style.top = `calc(${(r / ROWS) * 100}% + 2px)`;
+                    el.style.height = `calc(${(2 / ROWS) * 100}% - 4px)`;
+                }
+            }
+        }
+
+        window.onload = () => {
+            window.app = new StenkaApp();
+        };
+    </script>
+</body>
+</html>
