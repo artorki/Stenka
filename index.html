@@ -761,23 +761,47 @@
                     <div id="profileBusySlotsList" class="space-y-1.5"></div>
                 </div>
 
-                <!-- GOOGLE APPS SCRIPT CLOUD SYNC CONFIG (OPTIONAL FOR GITHUB PAGES) -->
-                <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+                <!-- CROSS-DEVICE SYNC (SAME ACCOUNT ON PHONE & LAPTOP) -->
+                <div class="p-3.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)] space-y-3">
                     <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-xs font-extrabold flex items-center gap-1.5">
-                                <i class="ph-bold ph-cloud-check text-emerald-500 text-base"></i>
-                                <span>اتصال به بک‌اند Google Apps Script (اختیاری)</span>
-                            </h3>
-                            <p class="text-[10px] text-[var(--text-secondary)]">برای ذخیره دائمی مدال‌ها و زمان‌بندی با دوستان آفلاین در GitHub Pages</p>
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                <i class="ph-bold ph-devices text-base"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold">اکانت ثابت بین موبایل و لپ‌تاپ</div>
+                                <div class="text-[10px] text-[var(--text-secondary)]">آی‌دی دستگاه دیگر خود را وارد کنید تا هر دو یکی شوند</div>
+                            </div>
                         </div>
-                        <span id="gasStatusBadge" class="px-2 py-0.5 rounded-full bg-zinc-500/10 text-[10px] font-bold text-[var(--text-secondary)]">P2P مستقیم</span>
+                        <span id="gasStatusBadge" class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">همگام</span>
                     </div>
-                    <div class="flex items-center gap-1.5 p-1.5 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-subtle)]">
-                        <input id="inputGasWebAppUrl" type="url" dir="ltr" placeholder="https://script.google.com/macros/s/.../exec"
+
+                    <!-- Switch / Login with Existing ST-XXXX ID -->
+                    <div class="flex items-center gap-1.5 p-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)]">
+                        <input id="inputLinkDeviceId" type="text" maxlength="10" placeholder="آی‌دی اکانت اصلی شما (مثلاً ST-4821)"
+                            class="flex-1 bg-transparent px-2 py-1 text-xs font-mono-en font-bold uppercase text-[var(--text-primary)] focus:outline-none" />
+                        <button onclick="app.linkAccountById()" class="px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[11px] font-bold hover:opacity-90 transition">
+                            ورود به این اکانت
+                        </button>
+                    </div>
+
+                    <!-- Offline Backup / Instant Transfer Code -->
+                    <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+                        <button onclick="app.exportAccountTransferCode()" class="py-1.5 px-2.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[10px] font-bold flex items-center justify-center gap-1 hover:border-zinc-400 transition">
+                            <i class="ph-bold ph-export text-xs"></i>
+                            <span>کپی کد پشتیبان اکانت</span>
+                        </button>
+                        <button onclick="app.toggleImportCodeBox()" class="py-1.5 px-2.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[10px] font-bold flex items-center justify-center gap-1 hover:border-zinc-400 transition">
+                            <i class="ph-bold ph-download-simple text-xs"></i>
+                            <span>وارد کردن کد پشتیبان</span>
+                        </button>
+                    </div>
+
+                    <div id="importCodeBox" class="hidden flex items-center gap-1.5 p-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)]">
+                        <input id="inputTransferToken" type="text" placeholder="کد پشتیبان کپی‌شده را اینجا الصاق کنید..."
                             class="flex-1 bg-transparent px-2 py-1 text-[11px] font-mono-en text-[var(--text-primary)] focus:outline-none" />
-                        <button onclick="app.saveGasWebAppUrl()" class="px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[11px] font-bold">
-                            اتصال
+                        <button onclick="app.importAccountTransferCode()" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">
+                            اعمال
                         </button>
                     </div>
                 </div>
@@ -1190,9 +1214,15 @@
         const COLS = 9;
         const ROWS = 12;
 
-        // اگر فایل Code.gs را در Google Apps Script دیپلوی کردید، می‌توانید لینک Web App آن را مستقیم اینجا قرار دهید
-        // تا همه بازیکنانی که وارد GitHub Pages شما می‌شوند به صورت خودکار به دیتابیس شما متصل شوند:
+        // =========================================================================
+        // تنظیمات مخصوص سازنده سایت (شما):
+        // کافی است فقط خودتان یک بار فایل Code.gs را در Google Apps Script دیپلوی کنید
+        // و لینک Web App آن را داخل کوتیشن زیر قرار دهید.
+        // بازیکنان دیگر هیچ تنظیماتی نمی‌بینند و به صورت خودکار و نامرئی به آن وصل می‌شوند.
+        // =========================================================================
         const DEFAULT_GAS_WEB_APP_URL = "";
+
+        const LOCAL_STORAGE_KEY = "STENKA_ARENA_ACCOUNT_V2";
 
         class StenkaApp {
             constructor() {
@@ -1215,13 +1245,15 @@
                 this.isPointerDragging = false;
                 this.breakerModeActive = false;
 
-                // Player Identity & Social Profile (In-Memory + Cloud Synced)
+                // Player Identity & Social Profile (Auto-Saved in LocalStorage + Cloud Synced)
+                const savedAccount = this.loadAccountFromStorage();
                 const rndNum = Math.floor(1000 + Math.random() * 9000);
-                this.myUserId = 'ST-' + rndNum;
-                this.localPeerId = 'u_' + rndNum;
-                this.playerName = 'USER' + rndNum;
 
-                this.profile = {
+                this.myUserId = savedAccount?.profile?.id || ('ST-' + rndNum);
+                this.localPeerId = 'u_' + this.myUserId.replace(/[^0-9A-Z]/gi, '').toLowerCase();
+                this.playerName = savedAccount?.profile?.name || ('USER' + rndNum);
+
+                this.profile = savedAccount?.profile || {
                     id: this.myUserId,
                     name: this.playerName,
                     dndImmediate: false,
@@ -1240,8 +1272,8 @@
                     ]
                 };
 
-                // Friends Directory (Pre-populated with interactive AI/Online friends + real discovered users)
-                this.friends = [
+                // Friends Directory (Restored from LocalStorage or Pre-populated with interactive friends)
+                this.friends = savedAccount?.friends || [
                     {
                         id: 'ST-7021',
                         name: 'PARSA_GM',
@@ -1279,9 +1311,11 @@
                 ];
 
                 this.publicUsersMap = new Map();
-                this.scheduledMatches = [];
+                this.scheduledMatches = savedAccount?.scheduledMatches || [];
                 this.incomingInvite = null;
                 this.personalPeer = null;
+                this.globalHubPeer = null;
+                this.hubConnections = [];
 
                 // Networking for Active Match
                 this.isOnlineMatch = false;
@@ -1314,6 +1348,7 @@
                 document.getElementById('inputPlayerName').value = this.playerName;
                 document.getElementById('profileNameInput').value = this.playerName;
 
+                this.saveAccountToStorage();
                 this.setupDefaultScheduleInputs();
                 this.setupDynamicPWAManifest();
                 this.updateIdentityBadges();
@@ -1323,6 +1358,7 @@
 
                 this.initFirebaseIfAvailable();
                 this.initPersonalSocialPeer();
+                this.initGlobalP2PDiscoveryHub();
                 this.initGasCloudSyncLoop();
                 this.startScheduleMonitorLoop();
                 this.bindGlobalShortcuts();
@@ -1331,51 +1367,104 @@
             }
 
             // =========================================================================
-            // GOOGLE APPS SCRIPT (Code.gs) CLOUD DATABASE BRIDGE
+            // AUTOMATIC LOCALSTORAGE ACCOUNT PERSISTENCE (ZERO LOGIN NEEDED)
+            // =========================================================================
+            loadAccountFromStorage() {
+                try {
+                    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+                    if (!raw) return null;
+                    return JSON.parse(raw);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            saveAccountToStorage() {
+                try {
+                    const data = {
+                        profile: this.profile,
+                        friends: this.friends,
+                        scheduledMatches: this.scheduledMatches
+                    };
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+                } catch (e) {}
+            }
+
+            // =========================================================================
+            // ZERO-CONFIG P2P GLOBAL RADAR HUB (AUTO-DISCOVER ONLINE PLAYERS BY NAME/ID)
+            // =========================================================================
+            initGlobalP2PDiscoveryHub() {
+                const hubId = 'stenka-global-radar-hub-v2';
+                try {
+                    // Try becoming or connecting to the public radar hub so online players find each other by name automatically
+                    const probePeer = new Peer(hubId);
+                    probePeer.on('open', () => {
+                        // We are the active radar beacon
+                        this.globalHubPeer = probePeer;
+                        this.publicUsersMap.set(this.myUserId, { ...this.profile, online: true });
+                        probePeer.on('connection', (conn) => {
+                            this.hubConnections.push(conn);
+                            conn.on('data', (msg) => {
+                                if (msg && msg.type === 'ANNOUNCE_USER' && msg.profile) {
+                                    this.publicUsersMap.set(msg.profile.id, { ...msg.profile, online: true });
+                                    this.mergeDiscoveredUser(msg.profile);
+                                    // Broadcast updated directory to all connected players
+                                    const allUsers = Array.from(this.publicUsersMap.values());
+                                    this.hubConnections.forEach(c => {
+                                        if (c && c.open) c.send({ type: 'DIRECTORY_SYNC', users: allUsers });
+                                    });
+                                }
+                            });
+                        });
+                    });
+
+                    probePeer.on('error', () => {
+                        // Hub already exists; connect to it as a client using our personalPeer
+                        setTimeout(() => {
+                            if (!this.personalPeer || !this.personalPeer.open) return;
+                            const conn = this.personalPeer.connect(hubId, { reliable: true });
+                            conn.on('open', () => {
+                                conn.send({ type: 'ANNOUNCE_USER', profile: this.profile });
+                            });
+                            conn.on('data', (msg) => {
+                                if (msg && msg.type === 'DIRECTORY_SYNC' && Array.isArray(msg.users)) {
+                                    msg.users.forEach(u => {
+                                        if (u && u.id && u.id !== this.myUserId) {
+                                            this.publicUsersMap.set(u.id, u);
+                                            this.mergeDiscoveredUser(u);
+                                        }
+                                    });
+                                }
+                            });
+                        }, 1500);
+                    });
+                } catch (e) {}
+            }
+
+            mergeDiscoveredUser(u) {
+                const fIdx = this.friends.findIndex(f => f.id === u.id);
+                if (fIdx !== -1) {
+                    this.friends[fIdx] = { ...this.friends[fIdx], ...u, online: true };
+                    this.saveAccountToStorage();
+                    if (this.mainView === 'friends') this.renderFriendsList();
+                }
+            }
+
+            // =========================================================================
+            // GOOGLE APPS SCRIPT (Code.gs) CLOUD DATABASE BRIDGE (SILENT & AUTOMATIC)
             // =========================================================================
             initGasCloudSyncLoop() {
-                const inputEl = document.getElementById('inputGasWebAppUrl');
-                if (inputEl && this.gasWebAppUrl) {
-                    inputEl.value = this.gasWebAppUrl;
-                }
-                this.updateGasBadgeUI();
-
                 if (this.gasWebAppUrl) {
                     this.syncMyProfileToGas();
                     this.pullFromGasBackend();
                 }
 
-                // Poll Google Apps Script every 12 seconds if URL is configured
+                // Poll Google Apps Script silently every 12 seconds if DEFAULT_GAS_WEB_APP_URL is set by site owner
                 setInterval(() => {
                     if (this.gasWebAppUrl) {
                         this.pullFromGasBackend();
                     }
                 }, 12000);
-            }
-
-            updateGasBadgeUI() {
-                const badge = document.getElementById('gasStatusBadge');
-                if (!badge) return;
-                if (this.gasWebAppUrl) {
-                    badge.className = 'px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold';
-                    badge.textContent = 'متصل به کلود (GAS)';
-                } else {
-                    badge.className = 'px-2 py-0.5 rounded-full bg-zinc-500/10 text-[10px] font-bold text-[var(--text-secondary)]';
-                    badge.textContent = 'حالت P2P مستقیم';
-                }
-            }
-
-            saveGasWebAppUrl() {
-                const val = document.getElementById('inputGasWebAppUrl').value.trim();
-                this.gasWebAppUrl = val;
-                this.updateGasBadgeUI();
-                if (val) {
-                    this.showToast('در حال همگام‌سازی با سرور Google Apps Script...');
-                    this.syncMyProfileToGas();
-                    this.pullFromGasBackend();
-                } else {
-                    this.showToast('حالت بدون سرور (P2P مستقیم) فعال شد');
-                }
             }
 
             async syncMyProfileToGas() {
@@ -1389,6 +1478,7 @@
                             action: 'saveProfile',
                             profile: {
                                 ...this.profile,
+                                friends: this.friends,
                                 online: true
                             }
                         })
@@ -1397,165 +1487,20 @@
             }
 
             async pushScheduleToGas(matchObj) {
-                if (!this.gasWebAppUrl) return;
-                try {
-                    await fetch(this.gasWebAppUrl, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            action: 'upsertSchedule',
-                            match: matchObj
-                        })
-                    });
-                } catch (e) {}
-            }
-
-            async pushDirectInviteToGas(inviteObj) {
-                if (!this.gasWebAppUrl) return;
-                try {
-                    await fetch(this.gasWebAppUrl, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({
-                            action: 'sendDirectInvite',
-                            invite: inviteObj
-                        })
-                    });
-                } catch (e) {}
-            }
-
-            async pullFromGasBackend() {
-                if (!this.gasWebAppUrl) return;
-                try {
+// ... existing code ... -->
                     const url = `${this.gasWebAppUrl}?action=sync&userId=${encodeURIComponent(this.myUserId)}&t=${Date.now()}`;
                     const res = await fetch(url);
                     const data = await res.json();
                     if (!data || !data.ok) return;
 
+                    // 0. Merge our own profile if updated from another device (Phone <-> Laptop sync)
+                    if (data.myProfile && data.myProfile.id === this.myUserId) {
+                        this.mergeOwnProfileFromRemote(data.myProfile);
+                    }
+
                     // 1. Update Public Users Directory & Friends' Busy Slots / Medals
                     if (Array.isArray(data.users)) {
-                        data.users.forEach(u => {
-                            if (u && u.id && u.id !== this.myUserId) {
-                                this.publicUsersMap.set(u.id, u);
-                                const fIdx = this.friends.findIndex(f => f.id === u.id);
-                                if (fIdx !== -1) {
-                                    this.friends[fIdx] = { ...this.friends[fIdx], ...u };
-                                }
-                            }
-                        });
-                        if (this.mainView === 'friends') this.renderFriendsList();
-                    }
-
-                    // 2. Sync Scheduled Matches
-                    if (Array.isArray(data.schedules)) {
-                        let changed = false;
-                        data.schedules.forEach(remoteMatch => {
-                            const localIdx = this.scheduledMatches.findIndex(s => s.id === remoteMatch.id);
-                            if (localIdx === -1) {
-                                this.scheduledMatches.unshift(remoteMatch);
-                                changed = true;
-                                if (remoteMatch.opponentId === this.myUserId && remoteMatch.status === 'pending') {
-                                    this.sendSystemNotification('دعوت زمان‌بندی مسابقه جدید', `${remoteMatch.hostName} شما را به بازی در ساعت ${remoteMatch.timeStr} دعوت کرد.`);
-                                }
-                            } else if (this.scheduledMatches[localIdx].status !== remoteMatch.status) {
-                                this.scheduledMatches[localIdx].status = remoteMatch.status;
-                                changed = true;
-                                if (remoteMatch.status === 'confirmed') {
-                                    this.sendSystemNotification('تایید زمان‌بندی مسابقه!', `مسابقه ${remoteMatch.gameTitle} تایید نهایی شد و شمارش معکوس آغاز گشت.`);
-                                }
-                            }
-                        });
-                        if (changed && this.mainView === 'schedule') this.renderScheduleView();
-                    }
-
-                    // 3. Incoming Live Invites
-                    if (Array.isArray(data.invites) && data.invites.length > 0) {
-                        const latest = data.invites[data.invites.length - 1];
-                        this.handleDirectSocialMessage({ type: 'DIRECT_CHALLENGE', invite: latest });
-                    }
-                } catch (e) {}
-            }
-
-            // =========================================================================
-            // PWA MANIFEST & PUSH NOTIFICATIONS ENGINE
-            // =========================================================================
-            setupDynamicPWAManifest() {
-                try {
-                    const manifest = {
-                        name: "STENKA & CHESS Arena",
-                        short_name: "StenkaChess",
-                        start_url: window.location.href,
-                        display: "standalone",
-                        background_color: "#F5F5F3",
-                        theme_color: "#141413",
-                        icons: [{
-                            src: "https://placehold.co/192x192/141413/FFFFFF/png?text=SC",
-                            sizes: "192x192",
-                            type: "image/png"
-                        }]
-                    };
-                    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-                    const link = document.createElement('link');
-                    link.rel = 'manifest';
-                    link.href = URL.createObjectURL(blob);
-                    document.head.appendChild(link);
-                } catch (e) {}
-                this.refreshNotificationIndicator();
-            }
-
-            refreshNotificationIndicator() {
-                const granted = ('Notification' in window) && Notification.permission === 'granted';
-                const dot = document.getElementById('notifStatusDot');
-                const txt = document.getElementById('profileNotifBtnText');
-                if (dot) {
-                    dot.className = granted
-                        ? 'w-2 h-2 rounded-full bg-emerald-500 absolute -top-0.5 -right-0.5'
-                        : 'w-2 h-2 rounded-full bg-amber-500 absolute -top-0.5 -right-0.5';
-                }
-                if (txt) {
-                    txt.textContent = granted ? 'نوتیفیکیشن فعال است ✓' : 'فعال‌سازی نوتیف و نصب';
-                }
-            }
-
-            async requestNotificationAndPWA() {
-                if (!('Notification' in window)) {
-                    this.showToast('مرورگر شما از نوتیفیکیشن وب پشتیبانی نمی‌کند؛ لطفاً صفحه را به Home Screen اضافه کنید.');
-                    return;
-                }
-                try {
-                    const perm = await Notification.requestPermission();
-                    this.refreshNotificationIndicator();
-                    if (perm === 'granted') {
-                        this.sendSystemNotification('STENKA & CHESS ARENA', 'نوتیفیکیشن‌های دعوت دوستان و یادآور مسابقات با موفقیت فعال شدند!');
-                        this.showToast('نوتیفیکیشن فعال شد! برای دریافت دائمی، سایت را Add to Home Screen کنید.');
-                    } else {
-                        this.showToast('مجوز نوتیفیکیشن داده نشد.');
-                    }
-                } catch (e) {
-                    this.showToast('برای دریافت نوتیفیکیشن در موبایل، گزینه Add to Home Screen را بزنید.');
-                }
-            }
-
-            sendSystemNotification(title, body) {
-                sfx.notify();
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    try {
-                        new Notification(title, {
-                            body,
-                            icon: 'https://placehold.co/128x128/141413/FFFFFF/png?text=SC'
-                        });
-                    } catch (e) {}
-                }
-            }
-
-            // =========================================================================
-            // PERSONAL SOCIAL PEERJS + FIRESTORE DIRECTORY (DIRECT INVITES WITHOUT CODES)
-            // =========================================================================
-            initPersonalSocialPeer() {
-                try {
-                    if (this.personalPeer) this.personalPeer.destroy();
+// ... existing code ... -->
                     const cleanId = this.myUserId.toLowerCase().replace(/[^a-z0-9]/g, '');
                     this.personalPeer = new Peer(`stenka-user-${cleanId}`);
                     this.personalPeer.on('connection', (conn) => {
@@ -1563,72 +1508,51 @@
                             this.handleDirectSocialMessage(msg, conn);
                         });
                     });
+                    // If our primary ID is already open on our other device (e.g. Phone is open while opening Laptop),
+                    // create a companion peer and sync live with our other device!
+                    this.personalPeer.on('error', (err) => {
+                        if (err && err.type === 'unavailable-id') {
+                            this.personalPeer = new Peer();
+                            this.personalPeer.on('open', () => {
+                                const syncConn = this.personalPeer.connect(`stenka-user-${cleanId}`, { reliable: true });
+                                syncConn.on('open', () => {
+                                    syncConn.send({ type: 'REQUEST_ACCOUNT_SNAPSHOT' });
+                                });
+                                syncConn.on('data', (msg) => {
+                                    this.handleDirectSocialMessage(msg, syncConn);
+                                });
+                            });
+                            this.personalPeer.on('connection', (conn) => {
+                                conn.on('data', (msg) => this.handleDirectSocialMessage(msg, conn));
+                            });
+                        }
+                    });
                 } catch (e) {}
             }
 
             handleDirectSocialMessage(msg, conn = null) {
                 if (!msg || !msg.type) return;
 
-                if (msg.type === 'DIRECT_CHALLENGE') {
-                    // Check if we are currently in our Busy/DND schedule!
-                    const busyCheck = this.isUserBusyAt(this.profile, new Date());
-                    if (busyCheck.busy) {
-                        if (conn && conn.open) {
-                            conn.send({
-                                type: 'CHALLENGE_BUSY_REJECT',
-                                reason: busyCheck.reason,
-                                fromName: this.profile.name
-                            });
-                        }
-                        return;
-                    }
-                    this.receiveIncomingChallenge(msg.invite);
-                } else if (msg.type === 'CHALLENGE_BUSY_REJECT') {
-                    sfx.error();
-                    this.showToast(`${msg.fromName} در حال حاضر امکان بازی ندارد (${msg.reason})`);
-                } else if (msg.type === 'SCHEDULE_INVITE') {
-                    const exists = this.scheduledMatches.some(s => s.id === msg.match.id);
-                    if (!exists) {
-                        this.scheduledMatches.unshift(msg.match);
-                        this.renderScheduleView();
-                        this.sendSystemNotification('دعوت زمان‌بندی مسابقه جدید', `${msg.match.hostName} شما را به بازی در ساعت ${msg.match.timeStr} دعوت کرد.`);
-                        this.showToast(`پیشنهاد زمان‌بندی بازی از طرف ${msg.match.hostName} دریافت شد`);
-                    }
-                } else if (msg.type === 'SCHEDULE_ACCEPTED') {
-                    const item = this.scheduledMatches.find(s => s.id === msg.matchId);
-                    if (item) {
-                        item.status = 'confirmed';
-                        this.renderScheduleView();
-                        this.sendSystemNotification('تایید زمان‌بندی مسابقه!', `${msg.accepterName} زمان مسابقه را تایید کرد. شمارش معکوس آغاز شد!`);
-                        this.showToast(`مسابقه زمان‌بندی شده با ${msg.accepterName} نهایی شد!`);
-                    }
-                }
-            }
-
-            async initFirebaseIfAvailable() {
-                try {
-                    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                        const config = JSON.parse(__firebase_config);
-                        const fbApp = initializeApp(config);
-                        this.auth = getAuth(fbApp);
-                        this.db = getFirestore(fbApp);
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(this.auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(this.auth);
-                        }
-                        onAuthStateChanged(this.auth, (u) => {
-                            this.fbUser = u;
-                            if (u) {
-                                this.syncMyProfileToCloud();
-                                this.listenToCloudSocialDirectory();
-                            }
+                if (msg.type === 'REQUEST_ACCOUNT_SNAPSHOT') {
+                    if (conn && conn.open) {
+                        conn.send({
+                            type: 'ACCOUNT_SNAPSHOT_DATA',
+                            profile: this.profile,
+                            friends: this.friends,
+                            scheduledMatches: this.scheduledMatches
                         });
                     }
-                } catch (e) {}
-            }
+                    return;
+                } else if (msg.type === 'ACCOUNT_SNAPSHOT_DATA' && msg.profile) {
+                    this.applyFullAccountSnapshot(msg.profile, msg.friends, msg.scheduledMatches);
+                    return;
+                }
 
+                if (msg.type === 'DIRECT_CHALLENGE') {
+                    // Check if we are currently in our Busy/DND schedule!
+// ... existing code ... -->
             async syncMyProfileToCloud() {
+                this.saveAccountToStorage();
                 this.syncMyProfileToGas();
                 if (!this.db || !this.fbUser) return;
                 try {
@@ -1636,11 +1560,183 @@
                     await setDoc(userRef, {
                         payload: JSON.stringify({
                             ...this.profile,
+                            friends: this.friends,
                             online: true,
                             updatedAt: Date.now()
                         })
                     });
                 } catch (e) {}
+            }
+
+            // =========================================================================
+            // CROSS-DEVICE ACCOUNT LINKING (PHONE <-> LAPTOP)
+            // =========================================================================
+            mergeOwnProfileFromRemote(remoteProf) {
+                if (!remoteProf) return;
+                // Merge medals without duplicates
+                if (Array.isArray(remoteProf.medals)) {
+                    const existingIds = new Set(this.profile.medals.map(m => m.id || m.title));
+                    remoteProf.medals.forEach(m => {
+                        const key = m.id || m.title;
+                        if (!existingIds.has(key)) {
+                            this.profile.medals.push(m);
+                        }
+                    });
+                }
+                if (Array.isArray(remoteProf.busySlots) && remoteProf.updatedAt > (this.profile.updatedAt || 0)) {
+                    this.profile.busySlots = remoteProf.busySlots;
+                    this.profile.dndImmediate = !!remoteProf.dndImmediate;
+                    this.profile.name = remoteProf.name || this.profile.name;
+                    this.playerName = this.profile.name;
+                }
+                if (Array.isArray(remoteProf.friends)) {
+                    const fIds = new Set(this.friends.map(f => f.id));
+                    remoteProf.friends.forEach(rf => {
+                        if (rf && rf.id && !fIds.has(rf.id)) {
+                            this.friends.push(rf);
+                        }
+                    });
+                }
+                this.saveAccountToStorage();
+                this.updateIdentityBadges();
+                if (this.mainView === 'profile') this.renderProfileView();
+                if (this.mainView === 'friends') this.renderFriendsList();
+            }
+
+            applyFullAccountSnapshot(prof, friendsList, schedulesList) {
+                if (!prof || !prof.id) return;
+                this.myUserId = prof.id.toUpperCase();
+                this.localPeerId = 'u_' + this.myUserId.replace(/[^0-9A-Z]/gi, '').toLowerCase();
+                this.profile = prof;
+                this.playerName = prof.name || this.playerName;
+                if (Array.isArray(friendsList) && friendsList.length > 0) {
+                    this.friends = friendsList;
+                }
+                if (Array.isArray(schedulesList) && schedulesList.length > 0) {
+                    this.scheduledMatches = schedulesList;
+                }
+                document.getElementById('inputPlayerName').value = this.playerName;
+                document.getElementById('profileNameInput').value = this.playerName;
+                this.saveAccountToStorage();
+                this.updateIdentityBadges();
+                this.renderProfileView();
+                this.renderFriendsList();
+                this.renderScheduleView();
+                this.initPersonalSocialPeer();
+                this.showToast(`اکانت ${this.myUserId} (${this.playerName}) با موفقیت روی این دستگاه فعال شد!`);
+            }
+
+            async linkAccountById() {
+                const rawInput = document.getElementById('inputLinkDeviceId').value.trim().toUpperCase();
+                if (!rawInput) {
+                    this.showToast('لطفاً آی‌دی اکانت خود (مثلاً ST-4821) را وارد کنید');
+                    return;
+                }
+                const targetId = rawInput.startsWith('ST-') ? rawInput : `ST-${rawInput.replace(/[^0-9A-Z]/g, '')}`;
+                this.showToast(`در حال جستجو و همگام‌سازی اکانت ${targetId}...`);
+
+                // 1. Check if loaded in Public Directory / Firestore
+                if (this.publicUsersMap.has(targetId)) {
+                    const u = this.publicUsersMap.get(targetId);
+                    this.applyFullAccountSnapshot(u, u.friends || this.friends, this.scheduledMatches);
+                    document.getElementById('inputLinkDeviceId').value = '';
+                    return;
+                }
+
+                // 2. Check Firestore directly if available
+                if (this.db && this.fbUser) {
+                    try {
+                        const userRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'stenka_users', targetId);
+                        const snap = await getDoc(userRef);
+                        if (snap.exists()) {
+                            const u = JSON.parse(snap.data().payload);
+                            this.applyFullAccountSnapshot(u, u.friends || this.friends, this.scheduledMatches);
+                            document.getElementById('inputLinkDeviceId').value = '';
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                // 3. Check Google Apps Script Cloud Backend if configured
+                if (this.gasWebAppUrl) {
+                    try {
+                        const res = await fetch(`${this.gasWebAppUrl}?action=getAccount&userId=${encodeURIComponent(targetId)}&t=${Date.now()}`);
+                        const data = await res.json();
+                        if (data && data.myProfile) {
+                            this.applyFullAccountSnapshot(data.myProfile, data.myProfile.friends || this.friends, data.schedules || this.scheduledMatches);
+                            document.getElementById('inputLinkDeviceId').value = '';
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                // 4. Live PeerJS P2P Fetch (if the other device e.g. Phone is currently open!)
+                const cleanTarget = targetId.toLowerCase().replace(/[^a-z0-9]/g, '');
+                let syncedViaP2P = false;
+                try {
+                    if (this.personalPeer && this.personalPeer.open) {
+                        const conn = this.personalPeer.connect(`stenka-user-${cleanTarget}`, { reliable: true });
+                        conn.on('open', () => {
+                            conn.send({ type: 'REQUEST_ACCOUNT_SNAPSHOT' });
+                        });
+                        conn.on('data', (msg) => {
+                            if (msg && msg.type === 'ACCOUNT_SNAPSHOT_DATA' && msg.profile) {
+                                syncedViaP2P = true;
+                                this.applyFullAccountSnapshot(msg.profile, msg.friends, msg.scheduledMatches);
+                                document.getElementById('inputLinkDeviceId').value = '';
+                            }
+                        });
+                    }
+                } catch (e) {}
+
+                // 5. Fallback: Switch this device's ID directly to targetId so both devices share the exact same ID
+                setTimeout(() => {
+                    if (!syncedViaP2P && this.myUserId !== targetId) {
+                        this.profile.id = targetId;
+                        this.applyFullAccountSnapshot(this.profile, this.friends, this.scheduledMatches);
+                        this.syncMyProfileToCloud();
+                        document.getElementById('inputLinkDeviceId').value = '';
+                    }
+                }, 1400);
+            }
+
+            exportAccountTransferCode() {
+                try {
+                    const bundle = {
+                        p: this.profile,
+                        f: this.friends,
+                        s: this.scheduledMatches
+                    };
+                    const token = btoa(encodeURIComponent(JSON.stringify(bundle)));
+                    this.copyTextFallback(token);
+                    this.showToast('کد پشتیبان اکانت کپی شد! آن را در دستگاه دوم وارد کنید.');
+                } catch (e) {
+                    this.showToast('خطا در ساخت کد پشتیبان');
+                }
+            }
+
+            toggleImportCodeBox() {
+                document.getElementById('importCodeBox').classList.toggle('hidden');
+            }
+
+            importAccountTransferCode() {
+                const raw = document.getElementById('inputTransferToken').value.trim();
+                if (!raw) {
+                    this.showToast('کد پشتیبان را وارد کنید');
+                    return;
+                }
+                try {
+                    const bundle = JSON.parse(decodeURIComponent(atob(raw)));
+                    if (bundle && bundle.p && bundle.p.id) {
+                        this.applyFullAccountSnapshot(bundle.p, bundle.f || [], bundle.s || []);
+                        document.getElementById('inputTransferToken').value = '';
+                        document.getElementById('importCodeBox').classList.add('hidden');
+                    } else {
+                        this.showToast('کد پشتیبان نامعتبر است');
+                    }
+                } catch (e) {
+                    this.showToast('فرمت کد پشتیبان صحیح نیست');
+                }
             }
 
             listenToCloudSocialDirectory() {
@@ -1998,6 +2094,7 @@
                 const already = this.friends.find(f => f.id === foundUser.id);
                 if (!already) {
                     this.friends.unshift(foundUser);
+                    this.saveAccountToStorage();
                     this.showToast(`${foundUser.name} (${foundUser.id}) به لیست دوستان اضافه شد!`);
                 } else {
                     this.showToast(`${foundUser.name} در لیست دوستان شما وجود دارد`);
@@ -2315,6 +2412,7 @@
                 };
 
                 this.scheduledMatches.unshift(matchObj);
+                this.saveAccountToStorage();
                 this.renderScheduleView();
                 this.pushScheduleToGas(matchObj);
                 this.showToast(`درخواست زمان‌بندی برای ${friendObj.name} ارسال شد`);
@@ -2345,6 +2443,7 @@
                 const m = this.scheduledMatches.find(s => s.id === matchId);
                 if (!m) return;
                 m.status = 'confirmed';
+                this.saveAccountToStorage();
                 this.renderScheduleView();
                 this.pushScheduleToGas(m);
                 this.sendSystemNotification('شمارش معکوس آغاز شد', `مسابقه ${m.gameTitle} در ساعت ${m.timeStr} تنظیم شد.`);
